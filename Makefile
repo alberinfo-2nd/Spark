@@ -6,12 +6,13 @@ export PATH := $(GCC_PATH):$(PATH)
 
 OBJ_DIR=./build_files
 SRC_DIR=./src
+INC_DIR=./include/
 
 NASMFLAGS=-f elf64 -w all
 CFLAGS=-mno-sse -O2 -ffreestanding -mcmodel=kernel -mno-red-zone -Wall -Wextra -Wno-unused-function 
 CFLAGS+=-Wfloat-equal -Wundef -Wcast-align -Wwrite-strings -Wlogical-op -Wredundant-decls
 CFLAGS+=-Wshadow -Wno-unused-parameter -Wstrict-prototypes -Wno-unused-variable -Werror
-CFLAGS+=-I $(SRC_DIR)
+CFLAGS+=-I $(INC_DIR)
 LDFLAGS=-N --script=src/linker.ld
 
 ASM_SOURCES=$(shell find $(SRC_DIR) -type f -name '*.asm')
