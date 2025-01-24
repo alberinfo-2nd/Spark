@@ -12,7 +12,7 @@ CFLAGS=-mno-sse -O2 -ffreestanding -mcmodel=kernel -mno-red-zone -Wall -Wextra -
 CFLAGS+=-Wfloat-equal -Wundef -Wcast-align -Wwrite-strings -Wlogical-op -Wredundant-decls
 CFLAGS+=-Wshadow -Wno-unused-parameter -Wstrict-prototypes -Wno-unused-variable -Werror
 CFLAGS+=-I $(SRC_DIR)
-LDFLAGS=-N --script=linker.ld
+LDFLAGS=-N --script=src/linker.ld
 
 ASM_SOURCES=$(shell find $(SRC_DIR) -type f -name '*.asm')
 C_SOURCES=$(shell find $(SRC_DIR) -type f -name '*.c')
