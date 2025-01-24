@@ -1,0 +1,11 @@
+iso/boot/kernel.bin
+
+build_files/
+
+*.log
+
+*.iso
+
+*.sym
+
+*.html

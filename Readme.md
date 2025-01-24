@@ -1,0 +1,1 @@
+Spark aims to be a lightweight x86_64 OS with a simple microkernel and reliable security features.
