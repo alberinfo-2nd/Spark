@@ -67,7 +67,7 @@ _start:
 
     pop edi
 
-    pop ebxf
+    pop ebx
 
     lgdt [gdt64.pointer]
     jmp gdt64.code:trampoline
@@ -209,7 +209,7 @@ higher_half:
     mov rdi, HIGHER_HALF_ADDR
     add rdi, rbx
 
-    push rdi
+    mov rsi, qword PML4+HIGHER_HALF_ADDR
 
     call kentry
 
@@ -238,6 +238,7 @@ gdt64:
     dq gdt64
 
 section .bss
+align 16
 stack: resb STACK_SIZE
 global stack_end
 stack_end:
