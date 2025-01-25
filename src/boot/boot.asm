@@ -2,6 +2,9 @@
 %define MBOOT2_MAGIC 0x36d76289; Magic value that has to be in eax
 %define HIGHER_HALF_ADDR 0xFFFFFFFF80000000
 
+high_PML4_idx equ (HIGHER_HALF_ADDR >> 39) & 0x1FF
+high_PDPT_idx equ (HIGHER_HALF_ADDR >> 30) & 0x1FF
+
 section .ltext
 mboot_header_start:
     dd 0xe85250d6
@@ -47,15 +50,15 @@ _start:
     call detect_cpuid
     call detect_lmode
     call check_NX_bit
-    call check_syscalls
+    ;call check_syscalls
 
     xor ecx, ecx
     call map_PD
     call setup_paging
     call enable_paging
-    
+
     push edi
-    mov edi, 16
+    mov edi, 16; Enable Write-Protect
 
     call write_cr0
 
@@ -64,10 +67,10 @@ _start:
 
     pop edi
 
-    pop ebx
+    pop ebxf
 
-    lgdt [lowgdt64.pointer]
-    jmp lowgdt64.code:trampoline
+    lgdt [gdt64.pointer]
+    jmp gdt64.code:trampoline
 
 detect_cpuid:
     pushfd
@@ -112,6 +115,7 @@ check_NX_bit:
 check_syscalls:
     mov eax, 0x80000001; are syscalls available?
     cpuid
+    xchg bx, bx
     test edx, 1 << 11; If bit 20 is set, NX is available
     jz no_boot ; We refuse to boot if the platform does not have syscalls.
 
@@ -130,16 +134,13 @@ map_PD:
 setup_paging:
     mov eax, PD; move location of PD into eax
     or eax, 0b11; mark it as present and r/w
-    mov [lowerPDPT], eax; move PD into first entry of PDPT
-    mov [higherPDPT+(high_PDPT_idx*8)], eax; move PD into first entry of PDPT @higher_vma
+    mov [PDPT+(high_PDPT_idx*8)], eax; move PD into first entry of PDPT @higher_vma
+    mov [PDPT], eax
 
-    mov eax, lowerPDPT; move location of PDPT into eax
-    or eax, 0b11; mark it ass present and r/w
-    mov [PML4], eax; move PDPT into first entry of PML4
-
-    mov eax, higherPDPT; move location of PDPT into eax
+    mov eax, PDPT; move location of PDPT into eax
     or eax, 0b11; mark it ass present and r/w
     mov [PML4+(high_PML4_idx*8)], eax ; move PDPT into first entry of PML4 @higher_vma
+    mov [PML4], eax
 
     ret
 
@@ -184,7 +185,7 @@ no_boot:
 
 [BITS 64]
 trampoline:
-    mov ax, lowgdt64.data
+    mov ax, gdt64.data
     mov ss, ax
     mov ds, ax
     mov es, ax
@@ -202,8 +203,13 @@ higher_half:
     mov rbp, qword stack
     mov rsp, qword stack_end
 
+    mov qword [PML4+HIGHER_HALF_ADDR], 0
+    mov qword [PDPT+HIGHER_HALF_ADDR], 0
+
     mov rdi, HIGHER_HALF_ADDR
     add rdi, rbx
+
+    push rdi
 
     call kentry
 
@@ -213,24 +219,23 @@ higher_half:
 section .lbss
 align 4096; align to 4k
 PML4: resb 4096; 512 entries of 8 bytes each, for a total of 4096 bytes.
-lowerPDPT: resb 4096; same as above
-higherPDPT: resb 4096; same as above
+PDPT: resb 4096; same as above
 PD: resb 4096; same as above
 
 section .lrodata
-lowgdt64:
+gdt64:
     dq 0
-.code: equ $ - lowgdt64
+.code: equ $ - gdt64
     dw 0xFFFF
     dw 0
     dd 0x00209A00
-.data: equ $ - lowgdt64
+.data: equ $ - gdt64
     dw 0xFFFF
     dw 0    
     dd 0x00009200
 .pointer:
-    dw $ - lowgdt64 - 1
-    dq lowgdt64
+    dw $ - gdt64 - 1
+    dq gdt64
 
 section .bss
 stack: resb STACK_SIZE
