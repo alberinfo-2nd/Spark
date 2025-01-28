@@ -20,6 +20,6 @@ typedef signed long long i64;
 
 typedef char* string;
 
-// typedef _Bool bool;
+typedef _Bool bool;
 
 #endif
