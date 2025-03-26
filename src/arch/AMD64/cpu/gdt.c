@@ -64,8 +64,8 @@ struct GDT_Table_t *setup_gdt() {
     GDT->entries[0] = (struct GDT_Segment_t){ 0 }; //Null descriptor
     GDT->entries[1] = (struct GDT_Segment_t){ .access = GDT_SEGMENT_EXECUTABLE | GDT_SEGMENT_TYPE | GDT_DPL_KERNEL | GDT_SEGMENT_PRESENT, .flags = GDT_SEGMENT_LMODE_FLAG, .limit = 0xFFFF }; //Kernel code descriptor
     GDT->entries[2] = (struct GDT_Segment_t){ .access = GDT_SEGMENT_RW | GDT_SEGMENT_TYPE | GDT_DPL_KERNEL | GDT_SEGMENT_PRESENT, .limit = 0xFFFF }; //Kernel data descriptor
-    GDT->entries[3] = (struct GDT_Segment_t){ .access = GDT_SEGMENT_EXECUTABLE | GDT_SEGMENT_TYPE | GDT_DPL_USER | GDT_SEGMENT_PRESENT, .flags = GDT_SEGMENT_LMODE_FLAG, .limit = 0xFFFF }; //Kernel code descriptor
-    GDT->entries[4] = (struct GDT_Segment_t){ .access = GDT_SEGMENT_RW | GDT_SEGMENT_TYPE | GDT_DPL_USER | GDT_SEGMENT_PRESENT, .limit = 0xFFFF }; //Kernel data descriptor
+    GDT->entries[3] = (struct GDT_Segment_t){ .access = GDT_SEGMENT_EXECUTABLE | GDT_SEGMENT_TYPE | GDT_DPL_USER | GDT_SEGMENT_PRESENT, .flags = GDT_SEGMENT_LMODE_FLAG, .limit = 0xFFFF }; //User code descriptor
+    GDT->entries[4] = (struct GDT_Segment_t){ .access = GDT_SEGMENT_RW | GDT_SEGMENT_TYPE | GDT_DPL_USER | GDT_SEGMENT_PRESENT, .limit = 0xFFFF }; //User data descriptor
     //TSS
 
     GDT->ptr.offset = (u64)&GDT->entries;
