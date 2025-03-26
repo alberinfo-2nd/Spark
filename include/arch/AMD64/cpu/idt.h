@@ -3,6 +3,7 @@
 
 #include <types.h>
 
+struct ISF_t; //Interrupt Stack Frame
 struct IDTR_t;
 struct IDT_Gate_t;
 struct IDT_t;

@@ -1,5 +1,55 @@
 #include <arch/AMD64/cpu/idt.h>
 
+#define DPL_KERNEL  0
+#define DPL_USER    0b11
+
+#define DESCRIPTOR_LDT              0b0010
+#define DESCRIPTOR_AVAILABLE_TSS    0b1001
+#define DESCRIPTOR_BUSY_TSS         0b1011
+#define DESCRIPTOR_CALL_GATE        0b1100
+#define DESCRIPTOR_INTERRUPT        0b1110
+#define DESCRIPTOR_TRAP_GATE        0b1111
+
+extern void ISR_0(void);
+extern void ISR_1(void);
+extern void ISR_2(void);
+extern void ISR_3(void);
+extern void ISR_4(void);
+extern void ISR_5(void);
+extern void ISR_6(void);
+extern void ISR_7(void);
+extern void ISR_8(void);
+extern void ISR_9(void);
+extern void ISR_10(void);
+extern void ISR_11(void);
+extern void ISR_12(void);
+extern void ISR_13(void);
+extern void ISR_14(void);
+extern void ISR_15(void);
+extern void ISR_16(void);
+extern void ISR_17(void);
+extern void ISR_18(void);
+extern void ISR_19(void);
+extern void ISR_20(void);
+extern void ISR_21(void);
+extern void ISR_22(void);
+extern void ISR_23(void);
+extern void ISR_24(void);
+extern void ISR_25(void);
+extern void ISR_26(void);
+extern void ISR_27(void);
+extern void ISR_28(void);
+extern void ISR_29(void);
+extern void ISR_30(void);
+extern void ISR_31(void);
+
+struct ISF_t {
+    u64 r15, r14, r13, r12, r11, r10, r9, r8;
+    u64 rbp, rdi, rsi, rdx, rcx, rbx, rax;
+    u64 interrupt_number, error_code;
+    u64 rip, cs, rflags, rsp, ss; //RSP is Return RSP. SS is null unless returning to compatibility mode is required.
+} __attribute__((packed));
+
 struct IDTR_t {
     u16 limit;
     u64 offset;
@@ -15,8 +65,8 @@ struct IDT_Gate_t {
     u8 DPL : 2;
     u8 present : 1;
     u16 offset_mid;
-    u64 offset_high;
-    u64 reserved_2;
+    u32 offset_high;
+    u32 reserved_2;
 } __attribute__((packed));
 
 struct IDT_t {
@@ -30,9 +80,30 @@ struct IDT_Table_t {
     u32 cpuId;
 };
 
-struct IDT_Table_t *setup_idt();
+void setup_idt_entry(struct IDT_Gate_t* entry, void* call_addr, u8 IST, u8 gate_type, u8 DPL);
+struct IDT_Table_t *setup_idt(void);
+void isr_handler(struct ISF_t* regs);
 
 static struct IDT_Table_t IDT_Table = (struct IDT_Table_t){ 0 };
+
+void setup_idt_entry(struct IDT_Gate_t* entry, void* call_addr, u8 IST, u8 gate_type, u8 DPL) {
+    entry->offset_low = (u16)((u64)call_addr & 0xFFFF); //Low 16 bits
+    entry->offset_mid = (u16)((u64)call_addr >> 16 & 0xFFFF); //Middle 16 bits
+    entry->offset_high = (u32)((u64)call_addr >> 32); //High 32 bits
+
+    if(DPL > 3) DPL = 3; //If DPL is wrong, then assume its user-mode
+    entry->DPL = DPL;
+
+    if(DPL == 3) entry->segment = 0x18; //User-mode CS
+    else entry->segment = 0x8; //Kernel-mode CS
+
+    entry->gate_type = gate_type;
+
+    if(IST > 8) IST = 0; //Discard invalid values
+    entry->IST = IST;
+
+    entry->present = 1;
+}
 
 struct IDT_Table_t *setup_idt() {
     struct IDT_Table_t *Current_table = &IDT_Table;
@@ -43,6 +114,34 @@ struct IDT_Table_t *setup_idt() {
     struct IDT_t *IDT = &Current_table->IDT;
 
     // Setup IDT Entries for ISRs and IRQs
+    setup_idt_entry(&IDT->entries[0], &ISR_0, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[1], &ISR_1, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[2], &ISR_2, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[3], &ISR_3, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[4], &ISR_4, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[5], &ISR_5, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[6], &ISR_6, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[7], &ISR_7, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[8], &ISR_8, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[10], &ISR_10, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[11], &ISR_11, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[12], &ISR_12, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[13], &ISR_13, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[14], &ISR_14, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[16], &ISR_16, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[17], &ISR_17, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[18], &ISR_18, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[19], &ISR_19, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[20], &ISR_20, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[21], &ISR_21, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[28], &ISR_28, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[29], &ISR_29, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    setup_idt_entry(&IDT->entries[30], &ISR_30, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+
+    IDT->ptr.offset = (u64)&IDT->entries;
+    IDT->ptr.limit = sizeof(IDT->entries)-1;
+
+    return Current_table;
 }
 
 void install_idt(bool is_bootcore, u32 cpuId) {
@@ -54,5 +153,9 @@ void install_idt(bool is_bootcore, u32 cpuId) {
 
     asm volatile("lidt (%0)" : : "r" ((u64)&Current_IDT_Table->IDT.ptr));
 
+    return;
+}
+
+void isr_handler(struct ISF_t* regs) {
     return;
 }
