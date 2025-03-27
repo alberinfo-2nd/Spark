@@ -1,4 +1,3 @@
-#include <arch/AMD64/interrupt/pic.h>
 #include <arch/AMD64/cpu/idt.h>
 
 #define DPL_KERNEL  0
