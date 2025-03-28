@@ -3,6 +3,7 @@
 #include <arch/AMD64/cpu/gdt.h>
 #include <arch/AMD64/interrupt/pic.h>
 #include <arch/AMD64/cpu/idt.h>
+#include <debug/serial.h>
 
 void kentry(void* multiboot_data, void* PML4) {
     install_gdt(true, 0);
@@ -10,6 +11,8 @@ void kentry(void* multiboot_data, void* PML4) {
     install_idt(true, 0);
 
     X86_CPU_sti();
+
+    DEBUG_SERIAL_init();
 
     for(;;);
 }
