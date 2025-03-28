@@ -1,6 +1,5 @@
-GCC_PATH=../cross/gcc
-GCC=$(GCC_PATH)/xgcc
-LD=../cross/ld/ld-new
+GCC=/opt/gcc-cross/gcc/xgcc
+LD=/opt/binutils-cross/bin/x86_64-elf-ld
 
 export PATH := $(GCC_PATH):$(PATH)
 

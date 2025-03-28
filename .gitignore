@@ -2,6 +2,8 @@ iso/boot/kernel.bin
 
 build_files/
 
+.vscode/
+
 *.log
 
 *.iso

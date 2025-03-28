@@ -1,6 +1,8 @@
 #ifndef TYPES_H
 #define TYPES_H
 
+#include <stdbool.h>
+
 #define false 0
 #define true 1
 
@@ -19,7 +21,5 @@ typedef unsigned long long u64;
 typedef signed long long i64;
 
 typedef char* string;
-
-// typedef _Bool bool;
 
 #endif
