@@ -90,13 +90,13 @@ struct IDT_Table_t {
     u32 cpuId;
 };
 
-void setup_idt_entry(struct IDT_Gate_t* entry, void* call_addr, u8 IST, u8 gate_type, u8 DPL);
-struct IDT_Table_t *setup_idt(void);
+void X86_IDT_setup_entry(struct IDT_Gate_t* entry, void* call_addr, u8 IST, u8 gate_type, u8 DPL);
+struct IDT_Table_t *X86_IDT_setup(void);
 void isr_handler(struct ISF_t* regs);
 
 static struct IDT_Table_t IDT_Table = (struct IDT_Table_t){ 0 };
 
-void setup_idt_entry(struct IDT_Gate_t* entry, void* call_addr, u8 IST, u8 gate_type, u8 DPL) {
+void X86_IDT_setup_entry(struct IDT_Gate_t* entry, void* call_addr, u8 IST, u8 gate_type, u8 DPL) {
     entry->offset_low = (u16)((u64)call_addr & 0xFFFF); //Low 16 bits
     entry->offset_mid = (u16)((u64)call_addr >> 16 & 0xFFFF); //Middle 16 bits
     entry->offset_high = (u32)((u64)call_addr >> 32); //High 32 bits
@@ -119,7 +119,7 @@ void setup_idt_entry(struct IDT_Gate_t* entry, void* call_addr, u8 IST, u8 gate_
     entry->reserved_2 = 0;
 }
 
-struct IDT_Table_t *setup_idt() {
+struct IDT_Table_t *X86_IDT_setup() {
     struct IDT_Table_t *Current_table = &IDT_Table;
     while(Current_table->next != 0) {
         Current_table = Current_table->next;
@@ -128,46 +128,46 @@ struct IDT_Table_t *setup_idt() {
     struct IDT_t *IDT = &Current_table->IDT;
 
     // Setup IDT Entries for ISRs and IRQs
-    setup_idt_entry(&IDT->entries[0], &ISR_0, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[1], &ISR_1, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[2], &ISR_2, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[3], &ISR_3, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[4], &ISR_4, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[5], &ISR_5, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[6], &ISR_6, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[7], &ISR_7, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[8], &ISR_8, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[10], &ISR_10, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[11], &ISR_11, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[12], &ISR_12, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[13], &ISR_13, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[14], &ISR_14, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[16], &ISR_16, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[17], &ISR_17, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[18], &ISR_18, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[19], &ISR_19, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[20], &ISR_20, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[21], &ISR_21, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[28], &ISR_28, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[29], &ISR_29, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[30], &ISR_30, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[0], &ISR_0, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[1], &ISR_1, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[2], &ISR_2, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[3], &ISR_3, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[4], &ISR_4, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[5], &ISR_5, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[6], &ISR_6, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[7], &ISR_7, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[8], &ISR_8, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[10], &ISR_10, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[11], &ISR_11, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[12], &ISR_12, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[13], &ISR_13, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[14], &ISR_14, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[16], &ISR_16, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[17], &ISR_17, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[18], &ISR_18, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[19], &ISR_19, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[20], &ISR_20, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[21], &ISR_21, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[28], &ISR_28, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[29], &ISR_29, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[30], &ISR_30, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
 
-    setup_idt_entry(&IDT->entries[32], &IRQ_0, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[33], &IRQ_1, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[34], &IRQ_2, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[35], &IRQ_3, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[36], &IRQ_4, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[37], &IRQ_5, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[38], &IRQ_6, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[39], &IRQ_7, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[40], &IRQ_8, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[41], &IRQ_9, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[42], &IRQ_10, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[43], &IRQ_11, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[44], &IRQ_12, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[45], &IRQ_13, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[46], &IRQ_14, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
-    setup_idt_entry(&IDT->entries[47], &IRQ_15, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[32], &IRQ_0, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[33], &IRQ_1, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[34], &IRQ_2, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[35], &IRQ_3, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[36], &IRQ_4, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[37], &IRQ_5, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[38], &IRQ_6, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[39], &IRQ_7, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[40], &IRQ_8, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[41], &IRQ_9, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[42], &IRQ_10, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[43], &IRQ_11, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[44], &IRQ_12, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[45], &IRQ_13, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[46], &IRQ_14, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+    X86_IDT_setup_entry(&IDT->entries[47], &IRQ_15, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
 
     IDT->ptr.offset = (u64)&IDT->entries;
     IDT->ptr.limit = sizeof(IDT->entries)-1;
@@ -175,10 +175,10 @@ struct IDT_Table_t *setup_idt() {
     return Current_table;
 }
 
-void install_idt(bool is_bootcore, u32 cpuId) {
+void X86_IDT_install(bool is_bootcore, u32 cpuId) {
     if(!is_bootcore) {} //TODO: Allocate new IDT entry
 
-    struct IDT_Table_t *Current_IDT_Table = setup_idt();
+    struct IDT_Table_t *Current_IDT_Table = X86_IDT_setup();
 
     Current_IDT_Table->cpuId = cpuId;
 

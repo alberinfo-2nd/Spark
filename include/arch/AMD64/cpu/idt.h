@@ -15,6 +15,6 @@ struct ISF_t { //Interrupt stack frame
     u64 rip, cs, rflags, rsp, ss; //RSP is Return RSP. SS is null unless returning to compatibility mode is required.
 } __attribute__((packed));
 
-extern void install_idt(bool is_bootcore, u32 cpuId);
+extern void X86_IDT_install(bool is_bootcore, u32 cpuId);
 
 #endif

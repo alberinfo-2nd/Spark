@@ -49,11 +49,11 @@ struct GDT_Table_t {
     u32 cpuId; //LapicId
 };
 
-struct GDT_Table_t *setup_gdt(void);
+struct GDT_Table_t *X86_GDT_setup(void);
 
 static struct GDT_Table_t GDT_Table = (struct GDT_Table_t){ 0 };
 
-struct GDT_Table_t *setup_gdt() {
+struct GDT_Table_t *X86_GDT_setup() {
     struct GDT_Table_t *Current_table = &GDT_Table;
     while(Current_table->next != 0) {
         Current_table = Current_table->next;
@@ -74,10 +74,10 @@ struct GDT_Table_t *setup_gdt() {
     return Current_table;
 }
 
-void install_gdt(bool is_bootcore, u32 cpuId) {
+void X86_GDT_install(bool is_bootcore, u32 cpuId) {
     if(!is_bootcore) {} //TODO: Allocate new GDT Entry
     
-    struct GDT_Table_t *Current_GDT_Table = setup_gdt();
+    struct GDT_Table_t *Current_GDT_Table = X86_GDT_setup();
 
     Current_GDT_Table->cpuId = cpuId;
 
