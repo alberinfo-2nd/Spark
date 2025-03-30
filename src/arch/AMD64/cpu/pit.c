@@ -55,7 +55,7 @@ void TIMER_PIT_set_reload_register(u8 channel, u16 value) {
     outportb(channel, value >> 8); //Hibyte
 }
 
-void TIMER_PIT_init() {
+bool TIMER_PIT_init() {
     //since current_status is initialized to zero, setting the channel for channel 0 is irrelevant
     current_status[1] |= (PIT_CH1-PIT_CH0) << 6;
     current_status[2] |= (PIT_CH2-PIT_CH0) << 6;
@@ -64,5 +64,5 @@ void TIMER_PIT_init() {
     TIMER_PIT_set_mode(PIT_CH0, PIT_MODE_one_shot);
     TIMER_PIT_set_access_mode(PIT_CH0, PIT_ACCESS_fullbyte);
 
-    return;
+    return true;
 }
