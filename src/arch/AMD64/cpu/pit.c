@@ -47,14 +47,15 @@ void TIMER_PIT_set_access_mode(u8 channel, u8 access_mode) {
 void TIMER_PIT_set_reload_register(u8 channel, u16 value) {
     int channel_idx = channel - PIT_CH0;
     u8 current_mode = (current_status[channel_idx] & (0b111 << 1)) >> 1;
+
+    //If the current mode for the channel is a rate or square wave generator, then set the divider value. Otherwise, its just a one time use value.
     if(current_mode == PIT_MODE_rate_generator || current_mode == PIT_MODE_square_generator) current_divider[channel_idx] = value;
 
     outportb(channel, value & 0xFF); //Lobyte
     outportb(channel, value >> 8); //Hibyte
 }
 
-//Should return pointers to standard timer functions, such as countdown, etc
-void* TIMER_PIT_init() {
+void TIMER_PIT_init() {
     //since current_status is initialized to zero, setting the channel for channel 0 is irrelevant
     current_status[1] |= (PIT_CH1-PIT_CH0) << 6;
     current_status[2] |= (PIT_CH2-PIT_CH0) << 6;
@@ -63,5 +64,5 @@ void* TIMER_PIT_init() {
     TIMER_PIT_set_mode(PIT_CH0, PIT_MODE_one_shot);
     TIMER_PIT_set_access_mode(PIT_CH0, PIT_ACCESS_fullbyte);
 
-    return NULL; //Temporary
+    return;
 }
