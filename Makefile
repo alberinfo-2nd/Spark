@@ -33,10 +33,10 @@ build: clean .WAIT $(ASM_OBJS) $(C_OBJS)
 	./objdump.sh
 
 run-bios:
-	qemu-system-x86_64 -serial file:serialOut.log -net none -boot d -smp 4 -m 32M --cdrom os.iso
+	qemu-system-x86_64 -serial file:serialOut.log -net none -boot d -smp 4 -m 32M -enable-kvm -cpu host,+invtsc --cdrom os.iso
 
 run-uefi:
-	qemu-system-x86_64 -serial file:serialOut.log -net none -boot d -smp 4 -m 128M --cdrom os.iso --bios bios/OVMF.fd
+	qemu-system-x86_64 -serial file:serialOut.log -net none -boot d -smp 4 -m 128M -enable-kvm -cpu host,+invtsc --cdrom os.iso --bios bios/OVMF.fd
 
 run-bochs:
 	 bochs -f bochsrc.bxrc
