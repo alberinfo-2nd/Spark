@@ -8,7 +8,7 @@ SRC_DIR=./src
 INC_DIR=./include/
 
 NASMFLAGS=-f elf64 -w all
-CFLAGS=-nostdlib -mno-sse -O2 -ffreestanding -mcmodel=kernel -mno-red-zone -Wall -Wextra -Wno-unused-function 
+CFLAGS=-nostdlib -lgcc -mno-sse -O2 -ffreestanding -mcmodel=kernel -mno-red-zone -Wall -Wextra -Wno-unused-function 
 CFLAGS+=-Wfloat-equal -Wundef -Wcast-align -Wwrite-strings -Wlogical-op -Wredundant-decls
 CFLAGS+=-Wshadow -Wno-unused-parameter -Wstrict-prototypes -Wno-unused-variable -Werror
 CFLAGS+=-I $(INC_DIR)
@@ -33,10 +33,10 @@ build: clean .WAIT $(ASM_OBJS) $(C_OBJS)
 	./objdump.sh
 
 run-bios:
-	qemu-system-x86_64 -serial file:serialOut.log -net none -boot d -smp 4 -m 32M --cdrom os.iso
+	qemu-system-x86_64 -serial file:serialOut.log -net none -boot d -smp 4 -m 32M -enable-kvm -cpu host,+invtsc --cdrom os.iso
 
 run-uefi:
-	qemu-system-x86_64 -serial file:serialOut.log -net none -boot d -smp 4 -m 128M --cdrom os.iso --bios bios/OVMF.fd
+	qemu-system-x86_64 -serial file:serialOut.log -net none -boot d -smp 4 -m 128M -enable-kvm -cpu host,+invtsc --cdrom os.iso --bios bios/OVMF.fd
 
 run-bochs:
 	 bochs -f bochsrc.bxrc
