@@ -78,6 +78,9 @@ IRQ_15: IRQ 15 ; Entry 48 in the IDT
 
 extern isr_handler
 isr_common:
+    push rbp
+    mov rbp, rsp
+
     push rax
     push rbx
     push rcx
@@ -113,6 +116,9 @@ isr_common:
     pop rbx
     pop rax
 
+    mov rsp, rbp
+    pop rbp
+
     add rsp, 16 ; Clear out the two pushq's done before (pushq and error code in case of ISR_ERROR)
 
     swapgs_if_necessary
@@ -120,6 +126,9 @@ isr_common:
 
 extern irq_handler
 irq_common:
+    push rbp
+    mov rbp, rsp
+
     push rax
     push rbx
     push rcx
@@ -154,6 +163,9 @@ irq_common:
     pop rcx
     pop rbx
     pop rax
+
+    mov rsp, rbp
+    pop rbp
 
     add rsp, 16 ; Clear out the two pushq's done before
 
