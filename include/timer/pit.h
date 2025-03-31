@@ -17,5 +17,7 @@
 bool TIMER_PIT_init(void);
 void TIMER_PIT_set_mode(u8 channel, u8 mode);
 void TIMER_PIT_set_freq(u8 channel, u32 value);
+void TIMER_PIT_timestamp_increment(void);
+u64 TIMER_PIT_get_timestamp(void); //In ns
 
 #endif

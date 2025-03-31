@@ -19,8 +19,12 @@ bool TIMER_TSC_init() {
     }
 
 unsupported:
+    X86_CPU_cli();
+
     TIMER_PIT_set_mode(PIT_CH0, PIT_MODE_rate_generator);
     TIMER_PIT_set_freq(PIT_CH0, 10000); //Tick at 10khz if the TSC is unsupported (tick every 0.1ms)
     //If the TSC is not invariant, then its problematic to use; A change in p-state or c-state would alter timekeeping, which is not ideal
+    
+    X86_CPU_sti();
     return false;
 }

@@ -17,6 +17,8 @@
 static u8 current_status[3] = {0,0,0}; //a copy of the value in the command register
 static u16 current_divider[3] = {0, 0, 0};
 
+static u64 wall_clock = 0; //Used for timekeeping with the PIT. strongly discouraged.
+
 void TIMER_PIT_set_encoding(u8 channel, u8 encoding) { 
     int channel_idx = channel - PIT_CH0;
     current_status[channel_idx] = (current_status[channel_idx] & ~1) | encoding;
@@ -59,6 +61,8 @@ void TIMER_PIT_set_freq(u8 channel, u32 value) {
 }
 
 bool TIMER_PIT_init() {
+    wall_clock = 0;
+
     //since current_status is initialized to zero, setting the channel for channel 0 is irrelevant
     current_status[1] |= (PIT_CH1-PIT_CH0) << 6;
     current_status[2] |= (PIT_CH2-PIT_CH0) << 6;
@@ -68,4 +72,12 @@ bool TIMER_PIT_init() {
     TIMER_PIT_set_access_mode(PIT_CH0, PIT_ACCESS_fullbyte);
 
     return true;
+}
+
+void TIMER_PIT_timestamp_increment() {
+    wall_clock += (u64)1e9/(PIT_freq/current_divider[0]);
+}
+
+u64 TIMER_PIT_get_timestamp() {
+    return wall_clock; //1e9 nanoseconds in a second
 }
