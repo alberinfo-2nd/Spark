@@ -61,4 +61,6 @@ u64 TIMER_get_boot_timestamp(void) {
             //Stub
             return 0;
     }
+
+    return 0;
 }
