@@ -32,11 +32,18 @@ void TIMER_init() {
 }
 
 void TIMER_disable(u8 timer_type) {
+    if(timer_type > TIMER_TYPE_HPET) return;
     timers[timer_type].active = false;
 }
 
 void TIMER_prepare_rediscover(u8 timer_type) {
+    if(timer_type > TIMER_TYPE_HPET) return;
     timers[timer_type].scanned = false;
+}
+
+void TIMER_set_timestamp_source(u8 timer_type) {
+    if(timer_type > TIMER_TYPE_HPET) return;
+    timestamp_source = timer_type;
 }
 
 void TIMER_irq_handler(u8 IRQn) {

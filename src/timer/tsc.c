@@ -1,7 +1,7 @@
-#include "timer/timer.h"
 #include <timer/tsc.h>
 #include <arch/AMD64/cpu/cpu.h>
 #include <timer/pit.h>
+#include <timer/timer.h>
 
 #define CPUID_TSC               1 << 4
 
