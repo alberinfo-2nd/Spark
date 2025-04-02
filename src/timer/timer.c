@@ -12,11 +12,16 @@ struct timer_t {
     bool(*init)(void);
 };
 
-static u8 timestamp_source = 0;
+struct clock_sources_t {
+    u8 timestamp;
+    u8 sleep;
+};
+
+static struct clock_sources_t clock_sources = {0, 0};
 
 struct timer_t timers[5] = {
     {TIMER_TYPE_PIT, false, false, false, &TIMER_PIT_init},
-    {TIMER_TYPE_TSC, false, false, false,  &TIMER_TSC_init},
+    {TIMER_TYPE_TSC, false, false, false,  NULL},
     {TIMER_TYPE_LAPIC, false, false, false, NULL},
     {TIMER_TYPE_LAPIC_TSC, false, false, false, NULL},
     {TIMER_TYPE_HPET, false, false, false, NULL},
@@ -43,20 +48,25 @@ void TIMER_prepare_rediscover(u8 timer_type) {
 
 void TIMER_set_timestamp_source(u8 timer_type) {
     if(timer_type > TIMER_TYPE_HPET) return;
-    timestamp_source = timer_type;
+    clock_sources.timestamp = timer_type;
+}
+
+void TIMER_set_sleep_source(u8 timer_type) {
+    if(timer_type > TIMER_TYPE_HPET) return;
+    clock_sources.sleep = timer_type;
 }
 
 void TIMER_irq_handler(u8 IRQn) {
     if(IRQn == 0) {
         //If the pit is enabled it has not been disabled by the HPET or LAPIC. Thus, if the tsc is not enabled the PIT will take care of timekeeping.
-        if(timestamp_source == TIMER_TYPE_PIT && timers[TIMER_TYPE_TSC].active == false) {
+        if(clock_sources.timestamp == TIMER_TYPE_PIT) {
             TIMER_PIT_timestamp_increment();
         }
     }
 }
 
 u64 TIMER_get_boot_timestamp(void) {
-    switch (timestamp_source) {
+    switch (clock_sources.timestamp) {
         case TIMER_TYPE_PIT:
             return TIMER_PIT_get_timestamp();
         case TIMER_TYPE_TSC:
@@ -70,4 +80,21 @@ u64 TIMER_get_boot_timestamp(void) {
     }
 
     return 0;
+}
+
+void TIMER_sleep(u32 time) {
+    switch (clock_sources.sleep) {
+        case TIMER_TYPE_PIT:
+            //TIMER_PIT_sleep()
+            break;
+        case TIMER_TYPE_LAPIC:
+            //Stub
+            break;
+        case TIMER_TYPE_LAPIC_TSC:
+            //Stub
+            break;
+        case TIMER_TYPE_HPET:
+            break;
+    }
+    return;
 }

@@ -1,3 +1,4 @@
+#include "arch/AMD64/cpu/cpu.h"
 #include <timer/pit.h>
 #include <arch/AMD64/cpu/ports.h>
 
@@ -67,9 +68,14 @@ bool TIMER_PIT_init() {
     current_status[1] |= (PIT_CH1-PIT_CH0) << 6;
     current_status[2] |= (PIT_CH2-PIT_CH0) << 6;
 
+    X86_CPU_cli();
+
     TIMER_PIT_set_encoding(PIT_CH0, PIT_ENCODING_PLAIN);
-    TIMER_PIT_set_mode(PIT_CH0, PIT_MODE_one_shot);
     TIMER_PIT_set_access_mode(PIT_CH0, PIT_ACCESS_fullbyte);
+    TIMER_PIT_set_mode(PIT_CH0, PIT_MODE_rate_generator);
+    TIMER_PIT_set_freq(PIT_CH0, 5000); //Tick at 10khz by default (tick every 0.1ms)
+
+    X86_CPU_sti();
 
     return true;
 }

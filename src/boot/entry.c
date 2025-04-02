@@ -5,6 +5,7 @@
 #include <arch/AMD64/cpu/idt.h>
 #include <debug/serial.h>
 #include <timer/timer.h>
+#include <debug/log.h>
 
 void kentry(void* multiboot_data, void* PML4) {
     X86_GDT_install(true, 0);
