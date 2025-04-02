@@ -1,7 +1,7 @@
 #include <arch/AMD64/cpu/idt.h>
 #include <arch/AMD64/interrupt/irq.h>
 #include <arch/AMD64/interrupt/pic.h>
-#include <timer/timer.h>
+#include <kernel/timer/timer.h>
 
 void irq_handler(struct ISF_t* regs) {
     switch (regs->interrupt_number) {
