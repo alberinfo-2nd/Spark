@@ -6,6 +6,7 @@
 #include <debug/serial.h>
 #include <timer/timer.h>
 #include <debug/log.h>
+#include <kernel/sync/spinlock.h>
 
 void kentry(void* multiboot_data, void* PML4) {
     X86_GDT_install(true, 0);
