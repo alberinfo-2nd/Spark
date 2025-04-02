@@ -3,9 +3,9 @@
 #include <arch/AMD64/cpu/gdt.h>
 #include <arch/AMD64/interrupt/pic.h>
 #include <arch/AMD64/cpu/idt.h>
-#include <debug/serial.h>
-#include <timer/timer.h>
-#include <debug/log.h>
+#include <kernel/debug/serial.h>
+#include <kernel/timer/timer.h>
+#include <kernel/debug/log.h>
 #include <kernel/sync/spinlock.h>
 
 void kentry(void* multiboot_data, void* PML4) {
