@@ -4,7 +4,6 @@
 #include <types.h>
 
 void DEBUG_SERIAL_init(void);
-void DEBUG_SERIAL_write(char c);
-void DEBUG_SERIAL_write_str(string str);
+void DEBUG_SERIAL_write_str(string format, ...);
 
 #endif

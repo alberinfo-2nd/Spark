@@ -1,4 +1,5 @@
-#include "types.h"
+#include <types.h>
+#include <stdarg.h>
 #include <debug/serial.h>
 #include <arch/AMD64/cpu/ports.h>
 
@@ -50,6 +51,33 @@ void DEBUG_SERIAL_write(char c) {
     outportb(SERIAL_COM1, c);
 }
 
-void DEBUG_SERIAL_write_str(string str) {
-    while(str[0]) DEBUG_SERIAL_write(*str++);
+void DEBUG_SERIAL_write_str(string format, ...) {
+    va_list args;
+    va_start(args, format);
+    while(*format) {
+        switch (*format) {
+            case '%':
+                format++;
+                switch (*format) {
+                    case '%':
+                        DEBUG_SERIAL_write('%');
+                        break;
+                    case 'c':
+                        DEBUG_SERIAL_write((char)va_arg(args, int));
+                        break;
+                    case 's':
+                        DEBUG_SERIAL_write_str(va_arg(args, string));
+                        break;
+                    //Other cases should also be handled
+                    default:
+                        break;
+                }
+                break;
+            default:
+                DEBUG_SERIAL_write(*format);
+        }
+
+        format++;
+    }
+    va_end(args);
 }
