@@ -3,6 +3,7 @@
 #include <arch/AMD64/cpu/gdt.h>
 #include <arch/AMD64/interrupt/pic.h>
 #include <arch/AMD64/cpu/idt.h>
+#include <arch/AMD64/mmu/mmu.h>
 #include <kernel/debug/serial.h>
 #include <kernel/timer/timer.h>
 #include <kernel/debug/log.h>
@@ -14,6 +15,8 @@ void kentry(void* multiboot_data, void* PML4) {
     X86_IDT_install(true, 0);
 
     X86_CPU_sti();
+
+    MMU_init(PML4);
 
     DEBUG_SERIAL_init();
 

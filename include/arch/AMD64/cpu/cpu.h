@@ -25,4 +25,10 @@ inline void X86_CPU_set_cr3(void* addr) {
     asm volatile("mov %0, %%cr3" : : "a" (addr) : "memory");
 }
 
+inline u8 X86_CPU_get_cpuid(void) {
+    u32 ebx = 0, unused = 0;
+    X86_CPU_cpuid(1, &unused, &ebx, &unused, &unused);
+    return (u8)(ebx >> 24);
+}
+
 #endif
