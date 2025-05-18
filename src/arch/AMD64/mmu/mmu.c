@@ -10,8 +10,10 @@
 #define align(x, y) ((u64)x & ~(y-1))
 
 #define is_address_canonical(x) ((u64)x < (u64)1 << vaddr_length && (u64)x > (~(u64)0 ^ (1 << vaddr_length)))
+#define page_to_paddr(x) (void*)((u64)x & ~((1 << 12) - 1) & ((1 << paddr_length) - 1))
 
 static u8 vaddr_length; //Store the implemented virtual address bits for canonical address checking
+static u8 paddr_length;
 
 struct PTe_t {
     union {
@@ -48,7 +50,7 @@ struct PDe_t {
             u8 PAT : 1;
             u8 AVL : 3;
             u8 Global : 1;
-            u8 LL : 1; //Is this entry the Lowest Level, or is the address pointing to a PT?
+            u8 PS : 1; //Is this entry the Lowest Level, or is the address pointing to a PT?
             u8 Dirty : 1;
             u8 Accessed : 1;
             u8 PCD : 1;
@@ -78,7 +80,7 @@ struct PDPe_t {
             u8 PAT : 1;
             u8 AVL : 3;
             u8 Global : 1;
-            u8 LL : 1; //Is this entry the Lowest Level, or is the address pointing to a PT?
+            u8 PS : 1; //Is this entry the Lowest Level, or is the address pointing to a PT?
             u8 Dirty : 1;
             u8 Accessed : 1;
             u8 PCD : 1;
@@ -140,6 +142,7 @@ void MMU_init(void *PML4) {
     if(address_spaces.addr == NULL) {
         u32 eax = 0, unused = 0;
         X86_CPU_cpuid(0x80000008, &eax, &unused, &unused, &unused);
+        paddr_length = eax & 0xFF;
         vaddr_length = (eax >> 8) & 0xFF;
 
         address_spaces.addr = PML4;
@@ -206,6 +209,7 @@ u8 MMU_map(void *address_space, void *paddr, void *vaddr, u32 size, u32 flags) {
         PDPT->entries[PDPT_idx].bits.RW = flags & MMU_FLAG_RW;
         PDPT->entries[PDPT_idx].bits.PWT = flags & MMU_FLAG_PWT;
         PDPT->entries[PDPT_idx].bits.PCD = flags & MMU_FLAG_PCD;
+        PDPT->entries[PDPT_idx].bits.PS = true;
         PDPT->entries[PDPT_idx].bits.PAT = flags & MMU_FLAG_PAT;
         PDPT->entries[PDPT_idx].bits.Global = flags & MMU_FLAG_GLOBAL;
         PDPT->entries[PDPT_idx].bits.NX = flags & MMU_FLAG_NX;
@@ -228,6 +232,7 @@ u8 MMU_map(void *address_space, void *paddr, void *vaddr, u32 size, u32 flags) {
         PD->entries[PD_idx].bits.RW = flags & MMU_FLAG_RW;
         PD->entries[PD_idx].bits.PWT = flags & MMU_FLAG_PWT;
         PD->entries[PD_idx].bits.PCD = flags & MMU_FLAG_PCD;
+        PD->entries[PD_idx].bits.PS = true;
         PD->entries[PD_idx].bits.PAT = flags & MMU_FLAG_PAT;
         PD->entries[PD_idx].bits.Global = flags & MMU_FLAG_GLOBAL;
         PD->entries[PD_idx].bits.NX = flags & MMU_FLAG_NX;
@@ -253,4 +258,28 @@ u8 MMU_map(void *address_space, void *paddr, void *vaddr, u32 size, u32 flags) {
     PT->entries[PT_idx].bits.Global = flags & MMU_FLAG_GLOBAL;
     PT->entries[PT_idx].bits.NX = flags & MMU_FLAG_NX;
     return 0;
+}
+
+void* MMU_get_paddr(void* address_space, void* vaddr) {
+    if(!is_address_canonical(vaddr)) return (void*)-1;
+
+    u16 PML4_idx = PML4_idx(vaddr);
+    u16 PDPT_idx = PDPT_idx(vaddr);
+    u16 PD_idx = PDPT_idx(vaddr);
+    u16 PT_idx = PDPT_idx(vaddr);
+
+    struct PML4_t* PML4 = (struct PML4_t*)address_space;
+    if (!PML4->entries[PML4_idx].bits.Present) return NULL;
+
+    struct PDPT_t* PDPT = PML4->PDPT[PML4_idx];
+    if (!PDPT->entries[PDPT_idx].bits.Present) return NULL;
+    if (PDPT->entries[PDPT_idx].bits.PS) return page_to_paddr(PDPT->entries[PDPT_idx].raw);
+
+    struct PD_t* PD = PDPT->PD[PDPT_idx];
+    if (!PD->entries[PD_idx].bits.Present) return NULL;
+    if (PD->entries[PD_idx].bits.PS) return page_to_paddr(PD->entries[PD_idx].raw);
+
+    struct PT_t* PT = PD->PT[PD_idx];
+    if (!PT->entries[PT_idx].bits.Present) return NULL;
+    return page_to_paddr(PT->entries[PT_idx].raw);
 }
