@@ -9,6 +9,6 @@ From 0xffffffff80000000 to 0xffffffffffffffff -> Kernel Higher Half; Has the .co
 
 
 *PMM*
-The PMM serves as a backer for the VMM. This means that it can only allocate 4KiB, 2MiB or 1GiB pages.
+The PMM serves as a backer for the VMM. This means that it can only allocate 4KiB pages (or multiples of).
 
-The scheme used for allocation is a buddy-like allocator where each level multiplies the entry size by 512
+Its a simple lockless bitmap, where each CPU starts with the same amount of memory, and can dynamically increase its memory pool by requesting it from another CPU when needed
