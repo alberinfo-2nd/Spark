@@ -21,4 +21,10 @@ inline void X86_CPU_cpuid(u32 function, u32 *eax, u32 *ebx, u32 *ecx, u32 *edx) 
 
 extern void X86_CPU_set_cr4_bit(u8 bit);
 
+inline u8 X86_CPU_get_cpuid(void) {
+    u32 ebx = 0, unused = 0;
+    X86_CPU_cpuid(1, &unused, &ebx, &unused, &unused);
+    return (u8)(ebx >> 24);
+}
+
 #endif
