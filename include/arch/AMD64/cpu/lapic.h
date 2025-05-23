@@ -3,6 +3,7 @@
 
 #include <types.h>
 
-bool LAPIC_init(void);
+bool X86_LAPIC_init(void);
+u8 X86_LAPIC_get_apic_id(void);
 
 #endif

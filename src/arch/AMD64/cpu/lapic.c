@@ -5,7 +5,7 @@
 
 bool APIC_enabled = false;
 
-bool LAPIC_init() {
+bool X86_LAPIC_init() {
     u32 unused = 0, edx = 0;
     X86_CPU_cpuid(1, &unused, &unused, &unused, &edx);
     if(!(edx & APIC_SUPPORTED)) return false; //APIC is not supported; not going to happen since we only boot on 64bit cpus anyways
@@ -17,7 +17,7 @@ bool LAPIC_init() {
     return true;
 }
 
-u8 LAPIC_get_lapic_id(void) {
+u8 X86_LAPIC_get_apic_id(void) {
     if(!APIC_enabled) return X86_CPU_get_cpuid();
 
     //TODO: return actual id
