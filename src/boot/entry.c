@@ -1,4 +1,5 @@
 #include <boot/entry.h>
+#include <boot/multiboot2.h>
 #include <arch/AMD64/cpu/cpu.h>
 #include <arch/AMD64/cpu/gdt.h>
 #include <arch/AMD64/interrupt/pic.h>
@@ -18,6 +19,8 @@ void kentry(void* multiboot_data, void* PML4) {
     DEBUG_SERIAL_init();
 
     TIMER_init();
+
+    scan_mboot(multiboot_data);
 
     for(;;);
 }
