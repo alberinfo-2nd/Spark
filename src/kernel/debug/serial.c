@@ -1,5 +1,4 @@
 #include <types.h>
-#include <stdarg.h>
 #include <kernel/debug/serial.h>
 #include <arch/AMD64/cpu/ports.h>
 
@@ -51,9 +50,7 @@ void DEBUG_SERIAL_write(char c) {
     outportb(SERIAL_COM1, c);
 }
 
-void DEBUG_SERIAL_write_str(string format, ...) {
-    va_list args;
-    va_start(args, format);
+void DEBUG_SERIAL_write_str(string format, va_list args) {
     while(*format) {
         switch (*format) {
             case '%':
@@ -66,9 +63,36 @@ void DEBUG_SERIAL_write_str(string format, ...) {
                         DEBUG_SERIAL_write((char)va_arg(args, int));
                         break;
                     case 's':
-                        DEBUG_SERIAL_write_str(va_arg(args, string));
+                        DEBUG_SERIAL_write_str((string)va_arg(args, void*), args);
+                        break;
+                    case 'X':
+                    case 'x':
+                        DEBUG_SERIAL_write_str((const string)"0x\0", args);
+
+                        u8 mask_move_count = 64 - 4; //From the start move everything except the most significant nibble
+
+                        u64 mask = 0xF000000000000000;
+                        u64 arg = (u64)va_arg(args, u64);
+                        while (!(arg & mask) && mask != 0xF) {
+                            mask >>= 4;
+                            mask_move_count -= 4;
+                        }
+                        while (mask) {
+                            char c = (arg & mask) >> mask_move_count;
+                            char letterIdx = *format == 'x' ? 'a' : 'A';
+                            if(c < 0xA) c += '0';
+                            else c = c - 0xA + letterIdx;
+
+                            DEBUG_SERIAL_write(c);
+
+                            mask >>= 4;
+                            mask_move_count -= 4;
+                        }
                         break;
                     //Other cases should also be handled
+                    case '\0':
+                        break;
+
                     default:
                         break;
                 }
@@ -79,5 +103,6 @@ void DEBUG_SERIAL_write_str(string format, ...) {
 
         format++;
     }
-    va_end(args);
+
+    return;
 }

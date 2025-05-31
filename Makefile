@@ -49,3 +49,5 @@ clean:
 all-bios: clean build run-bios
 
 all-uefi: clean build run-uefi
+
+all-bochs: clean build run-bochs
