@@ -11,7 +11,7 @@ void DEBUG_log(string format, ...) {
     //DEBUG_SERIAL_write_str("%c%s%c", '[', itoa(current_time), ']');
 
     DEBUG_SERIAL_write_str(format, args);
-    DEBUG_SERIAL_write_str((string)"\n");
+    DEBUG_SERIAL_write_str((string)"\n", NULL);
 
     va_end(args);
 }
