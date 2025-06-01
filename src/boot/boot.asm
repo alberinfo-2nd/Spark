@@ -138,7 +138,7 @@ setup_paging:
     mov [PDPT], eax
 
     mov eax, PDPT; move location of PDPT into eax
-    or eax, 0b11; mark it ass present and r/w
+    or eax, 0b11; mark it as present and r/w
     mov [PML4+(high_PML4_idx*8)], eax ; move PDPT into first entry of PML4 @higher_vma
     mov [PML4], eax
 
@@ -202,9 +202,6 @@ section .text
 higher_half:
     mov rbp, qword stack
     mov rsp, qword stack_end
-
-    mov qword [PML4+HIGHER_HALF_ADDR], 0
-    mov qword [PDPT+HIGHER_HALF_ADDR], 0
 
     mov rdi, HIGHER_HALF_ADDR
     add rdi, rbx
