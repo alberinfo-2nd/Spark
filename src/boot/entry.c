@@ -8,6 +8,7 @@
 #include <kernel/timer/timer.h>
 #include <kernel/debug/log.h>
 #include <kernel/sync/spinlock.h>
+#include <kernel/mm/pmm.h>
 
 void kentry(void* multiboot_data, void* PML4) {
     X86_GDT_install(true, 0);
@@ -20,6 +21,7 @@ void kentry(void* multiboot_data, void* PML4) {
 
     TIMER_init();
 
+    PMM_init();
     scan_mboot(multiboot_data);
 
     for(;;);

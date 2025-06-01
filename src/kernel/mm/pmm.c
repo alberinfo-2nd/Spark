@@ -2,6 +2,7 @@
 #include <kernel/sync/spinlock.h>
 #include <arch/AMD64/cpu/cpu.h>
 #include <arch/AMD64/cpu/lapic.h>
+#include <kernel/debug/log.h>
 
 #define align(x, y) ((x+y-1) & ~(y-1)) //Aligns x to the next multiple of y
 
@@ -22,11 +23,15 @@ struct PMM_memory_block_list_t {
     struct spinlock_t lock;
 };
 
+u8 __starting_memory[16 * 1024] __attribute__((aligned(4096), section(".data"))); //16 KiB of initial memory to allocate a few tables here and there
+
 struct PMM_memory_block_list_t PMM_block_list = {0};
 
 void* PMM_init() {
     if (PMM_block_list.addr == 0) {
         //Initialize first entry
+        PMM_block_list.cpuID = X86_LAPIC_get_apic_id(); //Should be zero in the BSP, but just in case
+        PMM_add_block(__starting_memory, sizeof(__starting_memory));
         return &PMM_block_list;
     }
 
@@ -35,7 +40,7 @@ void* PMM_init() {
     u32 cpuID = X86_LAPIC_get_apic_id();
     struct PMM_memory_block_list_t *block_list = &PMM_block_list;
     while(block_list->next != NULL) block_list = block_list->next;
-    //Allocate memory for the next block list
+    //TODO: Allocate memory for the next block list
     block_list->cpuID = cpuID;
 
     SPINLOCK_acquire_lock(&PMM_block_list.lock);
@@ -44,7 +49,7 @@ void* PMM_init() {
 }
 
 //Retrieves the block list for the current processor
-struct PMM_memory_block_list_t *get_block_list() {
+struct PMM_memory_block_list_t *get_block_list(void) {
     u32 cpuID = X86_LAPIC_get_apic_id();
     struct PMM_memory_block_list_t *block_list = &PMM_block_list;
 
@@ -85,16 +90,15 @@ void* PMM_alloc_aligned(u64 size, u64 alignment) {
             case 1:
                 for(u64 *bmp = block->bitmap; (u64)bmp <= (u64)block->bitmap + block->bitmap_size; bmp++) {
                     u64 map = ~(*bmp);
-                    if(map == ~0) continue;
+                    if(map == 0) continue;
                     
-                    u8 map_idx = 0;
-                    asm volatile("bsr %0, %1" : "=r" (map_idx) : "r" (map) : "rax", "rbx", "flags");
+                    u64 map_idx = 0;
+
+                    asm volatile("bsr %1, %0" : "=r" (map_idx) : "r" (map) : "rax", "rbx", "flags");
 
                     void* addr = (void*)((u64)block->addr + (((u64)bmp - (u64)block->bitmap) * 8 + (64-map_idx-1)) * PMM_map_size);
-
                     if ((u64)addr >= (u64)block->addr + block->size) break;
-
-                    *bmp |= 1 << map_idx;
+                    *bmp |= (u64)1 << map_idx;
 
                     return addr;
                 }
