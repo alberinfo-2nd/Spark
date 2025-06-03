@@ -134,12 +134,15 @@ map_PD:
 setup_paging:
     mov eax, PD; move location of PD into eax
     or eax, 0b11; mark it as present and r/w
-    mov [PDPT+(high_PDPT_idx*8)], eax; move PD into first entry of PDPT @higher_vma
-    mov [PDPT], eax
+    mov [PDPT_high+(high_PDPT_idx*8)], eax; move PD into first entry of PDPT @higher_vma
+    mov [PDPT_low], eax
 
-    mov eax, PDPT; move location of PDPT into eax
+    mov eax, PDPT_high; move location of PDPT into eax
     or eax, 0b11; mark it as present and r/w
     mov [PML4+(high_PML4_idx*8)], eax ; move PDPT into first entry of PML4 @higher_vma
+    
+    mov eax, PDPT_low
+    or eax, 0b11
     mov [PML4], eax
 
     ret
@@ -161,6 +164,7 @@ enable_paging:
     mov eax, cr0
     bts eax, 31; set paging
     mov cr0, eax
+
     ret
 
 write_cr0:
@@ -216,7 +220,8 @@ higher_half:
 section .lbss
 align 4096; align to 4k
 PML4: resb 4096; 512 entries of 8 bytes each, for a total of 4096 bytes.
-PDPT: resb 4096; same as above
+PDPT_high: resb 4096; same as above
+PDPT_low: resb 4096; same as above
 PD: resb 4096; same as above
 
 section .lrodata
