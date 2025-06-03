@@ -1,6 +1,7 @@
 #include <kernel/mm/pmm.h>
 #include <kernel/sync/spinlock.h>
 #include <arch/AMD64/cpu/cpu.h>
+#include <arch/AMD64/mmu/mmu.h>
 #include <arch/AMD64/cpu/lapic.h>
 #include <kernel/debug/log.h>
 
@@ -62,15 +63,25 @@ void PMM_add_block(void* addr, u64 size) {
     struct PMM_memory_block_list_t *block_list = get_block_list();
     if(block_list == NULL) block_list = (struct PMM_memory_block_list_t*)PMM_init();
 
+    u64 bitmap_size = (size-sizeof(struct PMM_memory_block_t)) / PMM_map_size / 8; //How many bytes are needed for the bitmap
+
+    if(MMU_get_address_half(addr) == MMU_addr_lower_half) {
+        addr = MMU_make_addr_half(addr, MMU_addr_higher_half);
+        if(MMU_get_paddr(NULL, addr) == NULL) {
+            //Map 4KiB from the start of addr until the end of the bitmap. covers around 128MiB
+            //What do we do if the new address is not aligned to 4KiB? Not handled as of now. TODO
+            u8 res = MMU_map_range(NULL, MMU_make_addr_half(addr, MMU_addr_lower_half), addr, bitmap_size, MMU_PAGE_4K, MMU_FLAG_RW | MMU_FLAG_SUPERVISOR | MMU_FLAG_PRESENT);
+            if(res != 0) return; //Cannot map address, for now.
+        }
+    }
+
     struct PMM_memory_block_t *block = (struct PMM_memory_block_t*)addr;
     block->next = block_list->addr;
     block_list->addr = block;
-
-    u64 bitmap_size = (size-sizeof(struct PMM_memory_block_t)) / PMM_map_size / 8; //How many bytes are needed for the bitmap
     
     block->bitmap = (u64*)((u64)addr + sizeof(struct PMM_memory_block_t));
     block->bitmap_size = bitmap_size;
-    block->addr = (u64*)(align((u64)block->bitmap + bitmap_size, PMM_map_size));
+    block->addr = (u64*)MMU_make_addr_half((void*)align((u64)block->bitmap + bitmap_size, PMM_map_size), MMU_addr_lower_half);
     block->size = size - ((u64)block->addr - (u64)block);
 
     block->next = NULL;
