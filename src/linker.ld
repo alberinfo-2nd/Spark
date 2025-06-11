@@ -33,4 +33,6 @@ SECTIONS
 
     . = ALIGN(4k);
     .bss : AT(ADDR(.bss) - KERNEL_VMA) { *(.bss) }
+
+    KERNEL_END = ALIGN(4k);
 }
