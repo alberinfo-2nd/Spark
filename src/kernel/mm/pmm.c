@@ -100,7 +100,6 @@ void PMM_add_block(void* addr, u64 size) {
 }
 
 //TODO: HANDLE ALIGNMENT, and possibly more things such as placement (for things like DMA, MMIOs and the like)
-
 void* PMM_alloc_aligned(u64 size, u64 alignment) {
     size = align(size, PMM_map_size);
 
@@ -189,6 +188,52 @@ void* PMM_alloc_aligned(u64 size, u64 alignment) {
 }
 
 //TODO: HANDLE FREEING
+void PMM_free(void *addr, u64 size) {
+    size = align(size, PMM_map_size);
 
+    struct PMM_memory_block_list_t *block_list = get_block_list();
+    
+    u32 page_count = size / PMM_map_size; //Number of PMM_map_size'd pages to allocate
+
+    for(struct PMM_memory_block_t *block = block_list->addr; block; block = block->next) {
+        if((u64)addr < (u64)MMU_make_addr_half(block->addr, MMU_addr_lower_half) || (u64)addr >= (u64)MMU_make_addr_half(block->addr, MMU_addr_lower_half) + block->size) continue;
+
+        u64 offset = ((u64)addr - (u64)block->addr) / PMM_map_size;
+
+        u64 bmp_idx = offset / 64;
+        u64 starting_map_idx = 64-(offset % 64);
+
+        u64 mask = 0, unmapped_pages = 0;
+        if(page_count >= starting_map_idx) {
+            if(starting_map_idx == 64) {
+                mask = ~mask;
+                unmapped_pages = 64;
+            } else {
+                mask = ((u64)1 << starting_map_idx) - 1;
+                unmapped_pages = starting_map_idx;
+            }
+        } else {
+            mask = (((u64)1 << page_count)-1) << (starting_map_idx-page_count);
+            unmapped_pages = page_count;
+        }
+
+        do {
+            u64* bmp = block->bitmap+bmp_idx;
+            *bmp &= ~mask;
+
+            bmp_idx++;
+            page_count -= unmapped_pages;
+            if(page_count >= 64) {
+                mask = ~(u64)0;
+                unmapped_pages = 64;
+            } else {
+                mask = (((u64)1 << page_count)-1) << (64-page_count);
+                unmapped_pages = page_count;
+            }
+        } while (page_count);
+    }
+
+    return;
+}
 
 //TODO: HANDLE SMP BLOCK LIST BALOONING
