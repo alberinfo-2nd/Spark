@@ -19,7 +19,8 @@ section .text
 %macro ISR_ERROR 1
 [GLOBAL ISR_%1]
     swapgs_if_necessary
-    push QWORD %1
+    ;The error code was already exists in the stack frame
+    push QWORD 0
     jmp isr_common
 %endmacro
 
@@ -141,7 +142,7 @@ irq_common:
     push r13
     push r14
     push r15
-
+    
     mov rdi, rsp
     call irq_handler
 
