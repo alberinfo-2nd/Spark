@@ -8,56 +8,56 @@ section .text
 %%skip:
 %endmacro
 
-%macro ISR_NOERROR 1
+%macro ISR_NOERRCODE 1
 [GLOBAL ISR_%1]
     swapgs_if_necessary
-    push QWORD %1
-    push QWORD 0
+    push QWORD %1 ;Error Code
+    push QWORD 0 ;Int#
     jmp isr_common
 %endmacro
 
-%macro ISR_ERROR 1
+%macro ISR_ERRCODE 1
 [GLOBAL ISR_%1]
     swapgs_if_necessary
     ;The error code was already exists in the stack frame
-    push QWORD 0
+    push QWORD 0 ;Int#
     jmp isr_common
 %endmacro
 
 %macro IRQ 1
 [GLOBAL IRQ_%1]
     swapgs_if_necessary
-    push QWORD 0
-    push QWORD %1
+    push QWORD 0 ;Error Code
+    push QWORD %1 ;Int#
     jmp irq_common
 %endmacro
 
-ISR_0: ISR_NOERROR 0 ;Division By zero
-ISR_1: ISR_NOERROR 1 ;Debug
-ISR_2: ISR_NOERROR 2 ;NMI
-ISR_3: ISR_NOERROR 3 ;Breakpoint
-ISR_4: ISR_NOERROR 4 ;Overflow
-ISR_5: ISR_NOERROR 5 ;Bound Range exceded
-ISR_6: ISR_NOERROR 6 ;Invalid opcode
-ISR_7: ISR_NOERROR 7 ;Device Not available
-ISR_8: ISR_ERROR 8 ;Double Fault
+ISR_0: ISR_NOERRCODE 0 ;Division By zero
+ISR_1: ISR_NOERRCODE 1 ;Debug
+ISR_2: ISR_NOERRCODE 2 ;NMI
+ISR_3: ISR_NOERRCODE 3 ;Breakpoint
+ISR_4: ISR_NOERRCODE 4 ;Overflow
+ISR_5: ISR_NOERRCODE 5 ;Bound Range exceded
+ISR_6: ISR_NOERRCODE 6 ;Invalid opcode
+ISR_7: ISR_NOERRCODE 7 ;Device Not available
+ISR_8: ISR_ERRCODE 8 ;Double Fault
 ; Isr 9 - Coprocessor segment overrun (does not exist on x86_64)
-ISR_10: ISR_ERROR 10 ;Invalid TSS
-ISR_11: ISR_ERROR 11 ;Segment Not Present
-ISR_12: ISR_ERROR 12 ;Stack-Segment fault
-ISR_13: ISR_ERROR 13 ;General Protection Fault
-ISR_14: ISR_ERROR 14 ;Page Fault
+ISR_10: ISR_ERRCODE 10 ;Invalid TSS
+ISR_11: ISR_ERRCODE 11 ;Segment Not Present
+ISR_12: ISR_ERRCODE 12 ;Stack-Segment fault
+ISR_13: ISR_ERRCODE 13 ;General Protection Fault
+ISR_14: ISR_ERRCODE 14 ;Page Fault
 ; Isr 15 is reserved
-ISR_16: ISR_NOERROR 16 ;x87 FPU error
-ISR_17: ISR_ERROR 17 ;Alignment Check
-ISR_18: ISR_NOERROR 18 ;Machine check
-ISR_19: ISR_NOERROR 19 ;SIMD FP Exception
-ISR_20: ISR_NOERROR 20 ;Virtualization Exception
-ISR_21: ISR_ERROR 21 ;Control Protection Exception
+ISR_16: ISR_NOERRCODE 16 ;x87 FPU error
+ISR_17: ISR_ERRCODE 17 ;Alignment Check
+ISR_18: ISR_NOERRCODE 18 ;Machine check
+ISR_19: ISR_NOERRCODE 19 ;SIMD FP Exception
+ISR_20: ISR_NOERRCODE 20 ;Virtualization Exception
+ISR_21: ISR_ERRCODE 21 ;Control Protection Exception
 ; Isrs 22 thorugh 27 are reserved
-ISR_28: ISR_NOERROR 28 ;Hypervisor Injection Exception
-ISR_29: ISR_ERROR 29 ;VMM Communication Exception
-ISR_30: ISR_ERROR 30 ;Security exception
+ISR_28: ISR_NOERRCODE 28 ;Hypervisor Injection Exception
+ISR_29: ISR_ERRCODE 29 ;VMM Communication Exception
+ISR_30: ISR_ERRCODE 30 ;Security exception
 ; ISR 31 is reserved
 
 IRQ_0: IRQ 0 ; Entry 32 in the IDT
@@ -79,9 +79,6 @@ IRQ_15: IRQ 15 ; Entry 48 in the IDT
 
 extern isr_handler
 isr_common:
-    push rbp
-    mov rbp, rsp
-
     push rax
     push rbx
     push rcx
@@ -96,7 +93,7 @@ isr_common:
     push r13
     push r14
     push r15
-
+    
     mov rdi, rsp
     call isr_handler
 
@@ -115,19 +112,13 @@ isr_common:
     pop rbx
     pop rax
 
-    mov rsp, rbp
-    pop rbp
-
-    add rsp, 16 ; Clear out the two pushq's done before (pushq and error code in case of ISR_ERROR)
+    add rsp, 16 ; Clear out the two pushq's done before (pushq and error code in case of ISR_ERRCODE)
 
     swapgs_if_necessary
     iretq
 
 extern irq_handler
 irq_common:
-    push rbp
-    mov rbp, rsp
-
     push rax
     push rbx
     push rcx
@@ -160,9 +151,6 @@ irq_common:
     pop rcx
     pop rbx
     pop rax
-
-    mov rsp, rbp
-    pop rbp
 
     add rsp, 16 ; Clear out the two pushq's done before
 

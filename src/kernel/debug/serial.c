@@ -73,10 +73,11 @@ void DEBUG_SERIAL_write_str(string format, va_list args) {
 
                         u64 mask = 0xF000000000000000;
                         u64 arg = (u64)va_arg(args, u64);
-                        while (!(arg & mask) && mask != 0xF) {
-                            mask >>= 4;
-                            mask_move_count -= 4;
-                        }
+                        // Remove leading zeroes
+                        // while (!(arg & mask) && mask != 0xF) {
+                        //     mask >>= 4;
+                        //     mask_move_count -= 4;
+                        // }
                         while (mask) {
                             char c = (arg & mask) >> mask_move_count;
                             char letterIdx = *format == 'x' ? 'a' : 'A';
