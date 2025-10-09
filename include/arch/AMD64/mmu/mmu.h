@@ -2,6 +2,7 @@
 #define MMU_H
 
 #include <types.h>
+#include <kernel/mm/vmm.h>
 
 #define MMU_addr_lower_half     0
 #define MMU_addr_higher_half    1
@@ -20,7 +21,7 @@
 #define MMU_FLAG_GLOBAL 1 << 6
 #define MMU_FLAG_NX 1 << 7
 
-void MMU_init(void* PML4);
+void MMU_init(void);
 void* MMU_get_cr3(void);
 void MMU_switch_cr3(void* PML4); //Switches the current address space in the respective cpu
 u8 MMU_map_page(void* address_space, void* paddr, void* vaddr, u32 page_size, u32 flags);
@@ -31,5 +32,6 @@ void MMU_invlpg(void* vaddr); //INVLPG will always execute on the current addres
 bool MMU_is_canonical(void *addr);
 int MMU_get_address_half(void *addr); //Returns which section of the memory the address lives in
 void* MMU_make_addr_half(void *addr, int half); //Returns the corresponding address if it lived in X half (i.e, a lower-half address equivalent to its higher half address)
+void MMU_travel_address_space(struct VMM_Address_Space_t* address_space);
 
 #endif

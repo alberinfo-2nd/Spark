@@ -1,8 +1,8 @@
 #include <kernel/debug/log.h>
-#include <types.h>
 #include <arch/AMD64/mmu/mmu.h>
 #include <arch/AMD64/cpu/cpu.h>
 #include <kernel/mm/pmm.h>
+#include <kernel/mm/vmm.h>
 
 #define KERNEL_HIGHER_HALF_ADDR 0xFFFFFFFF80000000
 
@@ -21,6 +21,7 @@
 #define is_address_higher_half(x) ((u64)x >= HIGHER_HALF_ADDR)
 #define is_address_canonical(x) (is_address_lower_half(x) || is_address_higher_half(x))
 #define page_to_paddr(x) (void*)((u64)x & ~((1 << 12) - 1) & (((u64)1 << paddr_length) - 1))
+#define idx_to_vaddr(PML4, PDPT, PD, PT) ((-1ULL << vaddr_length) * (bool)(PML4 & (1 << 8)) | ((u64)PML4 & 0x1FF) << 39 | ((u64)PDPT & 0x1FF) << 30 | ((u64)PD & 0x1FF) << 21 | ((u64)PT & 0x1FF) << 12)
 
 static bool PAGE_1GB_SUPPORTED = false;
 static u8 vaddr_length; //Store the implemented virtual address bits for canonical address checking
@@ -78,61 +79,35 @@ struct PML4_t {
 // Maybe PML5?
 //
 
-//Stores the pointer to the current cr3 in each thread / core
-struct address_spaces_t {
-    struct PML4_t* addr;
-    struct address_spaces_t* next;
-    u32 cpuId;
-};
+void MMU_init(void) {
+    u32 eax = 0, unused = 0;
+    X86_CPU_cpuid(0x80000008, &eax, &unused, &unused, &unused);
+    paddr_length = eax & 0xFF;
+    vaddr_length = (eax >> 8) & 0xFF;
 
-//List of current CR3 per cpu
-struct address_spaces_t address_spaces;
+    LOWER_HALF_ADDR = ((u64)1 << (vaddr_length-1)) - 1;
+    HIGHER_HALF_ADDR = (~(u64)0 ^ LOWER_HALF_ADDR);
 
-void MMU_init(void *PML4) {
-    //First entry is empty
-    if(address_spaces.addr == NULL) {
-        u32 eax = 0, unused = 0;
-        X86_CPU_cpuid(0x80000008, &eax, &unused, &unused, &unused);
-        paddr_length = eax & 0xFF;
-        vaddr_length = (eax >> 8) & 0xFF;
-
-        LOWER_HALF_ADDR = ((u64)1 << (vaddr_length-1)) - 1;
-        HIGHER_HALF_ADDR = (~(u64)0 ^ LOWER_HALF_ADDR);
-
-        address_spaces.addr = PML4;
-        address_spaces.cpuId = X86_CPU_get_cpuid();
-
-        u32 edx = 0;
-        X86_CPU_cpuid(0x80000001, &unused, &unused, &unused, &edx);
-        PAGE_1GB_SUPPORTED = edx & (1 << 26);
-    }
-
-    struct address_spaces_t* address_space = &address_spaces;
-    while(address_space->next) address_space = address_space->next;
-    //alloc space for the new address space
-
-    address_space->addr = PML4;
-    address_space->cpuId = X86_CPU_get_cpuid();
+    u32 edx = 0;
+    X86_CPU_cpuid(0x80000001, &unused, &unused, &unused, &edx);
+    PAGE_1GB_SUPPORTED = edx & (1 << 26);
     return;
 }
 
+//Note that this returns the physical address of PML4!!!!
 void *MMU_get_cr3() {
     void *cr3 = 0;
     asm volatile("mov %%cr3, %0" : "=r" (cr3) : : "rax");
     return cr3;
 }
 
+//The physical address of PML4 is expected. If not given then the switch silently fails.
 void MMU_switch_cr3(void *PML4) {
     if (!is_address_canonical(PML4)) return;
+    if (MMU_get_address_half(PML4) != MMU_addr_lower_half) return;
 
-    u8 current_cpuid = X86_CPU_get_cpuid();
-    for(struct address_spaces_t* address_space = &address_spaces; address_space; address_space = address_space->next) {
-        if(address_space->cpuId != current_cpuid) continue;
-
-        address_space->addr = (struct PML4_t*)PML4;
-        break;
-    }
-
+    //Setting the same value would just flush the TLB.
+    if(MMU_get_cr3() == PML4) return;
     X86_CPU_set_cr3(PML4);
 }
 
@@ -251,8 +226,6 @@ u8 MMU_map_page(void *address_space, void *paddr, void *vaddr, u32 page_size, u3
 
 u8 MMU_map_range(void *address_space, void *paddr, void *vaddr, u64 size, u32 page_size, u32 flags) {
     while(size) {
-        DEBUG_log((const string)"MMU_map_range; paddr: %x, vaddr: %x, page size: %x, size: %x\0", paddr, vaddr, page_size, size);
-
         if(size < page_size) {
             size = page_size;
             page_size = MMU_PAGE_4K;
@@ -292,6 +265,79 @@ void* MMU_get_paddr(void* address_space, void* vaddr) {
     struct PT_t* PT = PD->PT[PD_idx];
     if (!(PT->entries[PT_idx].raw & MMU_ENTRY_PRESENT)) return NULL;
     return page_to_paddr(PT->entries[PT_idx].raw);
+}
+
+void MMU_travel_address_space(struct VMM_Address_Space_t* address_space) {
+    if(address_space == NULL) return;
+
+    const int maxRange = MMU_PAGE_4K/sizeof(u64);
+    
+    struct PML4_t* PML4 = (struct PML4_t*)address_space->CR3;
+    u64 rangeAddress = 0;
+    u64 rangeSize = 0;
+    for(int PML4_idx = 0; PML4_idx < maxRange; PML4_idx++) {
+        //If the sign extension between the address range we are currently looking at and the page at PML4[PML4_idx] are different (Lower half vs higher half)
+        if (idx_to_vaddr(PML4_idx, 0, 0, 0) >> vaddr_length != rangeAddress >> vaddr_length) {
+            if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
+            rangeAddress = idx_to_vaddr(PML4_idx, 0, 0, 0);
+            rangeSize = 0;
+        }
+
+        if(!PML4->entries[PML4_idx].raw) {
+            rangeSize += (u64)MMU_PAGE_1G * 512;
+            continue;
+        }
+
+        /* ------------------------------------------------------ */
+        struct PDPT_t* PDPT = page_to_paddr(PML4->entries[PML4_idx].raw);
+        for(int PDPT_idx = 0; PDPT_idx < maxRange; PDPT_idx++) {
+            if(!PDPT->entries[PDPT_idx].raw) {
+                rangeSize += MMU_PAGE_1G;
+                continue;
+            }
+
+            if(PDPT->entries[PDPT_idx].raw & MMU_ENTRY_PS) {
+                if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
+                rangeAddress = idx_to_vaddr(PML4_idx, (PDPT_idx+1), 0, 0);
+                rangeSize = 0;
+                continue;
+            }
+
+            /* ------------------------------------------------------ */
+            struct PD_t* PD = page_to_paddr(PDPT->entries[PDPT_idx].raw);
+            for(int PD_idx = 0; PD_idx < maxRange; PD_idx++) {
+                if(!PD->entries[PD_idx].raw) {
+                    rangeSize += MMU_PAGE_2M;
+                    continue;
+                }
+
+                if(PD->entries[PD_idx].raw & MMU_ENTRY_PS) {
+                    if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
+                    rangeAddress = idx_to_vaddr(PML4_idx, PDPT_idx, (PD_idx+1), 0);
+                    rangeSize = 0;
+                    continue;
+                }
+
+                /* ------------------------------------------------------ */
+                struct PT_t* PT = page_to_paddr(PD->entries[PD_idx].raw);
+                for(int PT_idx = 0; PT_idx < maxRange; PT_idx++) {
+                    if(!PT->entries[PT_idx].raw) {
+                        rangeSize += MMU_PAGE_4K;
+                        continue;
+                    }
+
+                    if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
+                    rangeAddress = idx_to_vaddr(PML4_idx, PDPT_idx, PD_idx, (PT_idx+1));
+                    rangeSize = 0;
+                }
+                /* ------------------------------------------------------ */
+            }
+            /* ------------------------------------------------------ */
+        }
+        /* ------------------------------------------------------ */
+    }
+
+    if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
 }
 
 //TODO: Unmap

@@ -1,0 +1,23 @@
+#ifndef VMM_H
+#define VMM_H
+
+#include <types.h>
+
+//Each process has its own address space. This includes having different address spaces between different cores. TODO: How to handle?
+struct VMM_Address_Space_t {
+    //Normally points to PML4. Maybe PML5 in the future?
+    void* CR3;
+
+    //Tree ordered by address - Used to quickly find available spaces that have to meet constraints (i.e. <4GiB) or when freeing.
+    struct AVL_tree_t *address_tree;
+    
+    //Tree ordered by size - Used to quickly allocate memory.
+    struct AVL_tree_t *size_tree;
+};
+
+void VMM_init(void);
+void VMM_add_range(struct VMM_Address_Space_t* address_space, u64 address, u64 size); //Add a free range to the provided address space
+struct VMM_Address_Space_t* VMM_create_address_space(void);
+void VMM_switch_address_space(struct VMM_Address_Space_t* newAddressSpace);
+
+#endif
