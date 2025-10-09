@@ -11,3 +11,5 @@ build_files/
 *.sym
 
 *.html
+
+*.ini
