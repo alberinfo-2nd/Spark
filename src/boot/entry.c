@@ -24,6 +24,8 @@ void kentry(void* multiboot_data, void* PML4) {
 
     MMU_init();
 
+    X86_CPU_create_self();
+
     TIMER_init();
 
     PMM_init();
