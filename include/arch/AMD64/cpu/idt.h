@@ -6,7 +6,6 @@
 struct IDTR_t;
 struct IDT_Gate_t;
 struct IDT_t;
-struct IDT_Table_t;
 
 struct ISF_t { //Interrupt stack frame
     u64 r15, r14, r13, r12, r11, r10, r9, r8;

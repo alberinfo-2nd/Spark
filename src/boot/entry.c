@@ -16,22 +16,20 @@
 void kentry(void* multiboot_data, void* PML4) {
     DEBUG_SERIAL_init();
 
-    X86_GDT_install(true, 0);
-    X86_PIC_remap(32, 32+8); //Set the master pic to start in the 32nd entry of the IDT (32nd interrupt vector), and the slave PIC on the 40th
-    X86_IDT_install(true, 0);
-
-    X86_CPU_sti();
-
     MMU_init();
-
-    X86_CPU_create_self();
-
-    TIMER_init();
 
     PMM_init();
     scan_mboot(multiboot_data);
 
+    X86_CPU_create_self();
+
     VMM_init();
+
+    X86_GDT_install();
+    X86_PIC_remap(32, 32+8); //Set the master pic to start in the 32nd entry of the IDT (32nd interrupt vector), and the slave PIC on the 40th
+    X86_IDT_install(true, 0);
+
+    TIMER_init();
 
     for(;;);
 }

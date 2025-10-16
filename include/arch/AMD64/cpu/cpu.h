@@ -1,6 +1,7 @@
 #ifndef CPU_H
 #define CPU_H
 
+#include "kernel/debug/log.h"
 #include <types.h>
 #include <arch/AMD64/cpu/gdt.h>
 #include <arch/AMD64/cpu/idt.h>
@@ -9,11 +10,12 @@
 //Information about this cpu. Will be expanded in the future.
 //Only used for the kernel, usermode will store its own information within a thread
 struct X86_CPU_self_t {
-    u32 cpuID; //Apic ID, preferably
+    struct X86_CPU_self_t* self;
     struct GDT_t* gdt;
     struct IDT_t* idt;
     struct TSS_t* tss;
     struct VMM_Address_Space_t* address_space;
+    u32 cpuID; //Apic ID, preferably
     // + possibly more data, such as IOAPIC, LAPIC, a pointer to the numa domain, tsc / timer info, etc
 };
 
@@ -44,17 +46,17 @@ inline u8 X86_CPU_get_cpuid(void) {
 }
 
 inline u64 X86_CPU_rdmsr(u32 msr) {
-    u64 val = 0;
-    asm volatile("rdmsr" : "=a" (*(u32*)&val), "=d" (*(u32*)(&val + 1)) : "c" (msr)); //
-    return val;
+    u32 low = 0, high = 0;
+    asm volatile("rdmsr" : "=a" (low), "=d" (high) : "c" (msr)); //
+    return ((u64)high << 32) | low;
 }
 
 inline void X86_CPU_wrmsr(u32 msr, u64 value) {
-    asm volatile("wrmsr" : : "a" (value & ~(u32)1), "d" (value >> 32), "c" (msr));
+    asm volatile("mov %%eax, %0\nmov %%edx, %1\nmov %%ecx, %2\nwrmsr" : : "a" ((u32)value), "d" ((u32)(value >> 32)), "c" (msr));
 }
 
 extern void X86_CPU_set_cr4_bit(u8 bit);
 extern struct X86_CPU_self_t* X86_CPU_get_self(void);
-extern void X86_CPU_create_self(); //Will create a struct X86_CPU_self_t and put it in GS
+extern void X86_CPU_create_self(void); //Will create a struct X86_CPU_self_t and put it in GS
 
 #endif
