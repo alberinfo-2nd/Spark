@@ -1,5 +1,3 @@
-#include "arch/AMD64/mmu/mmu.h"
-#include "kernel/debug/log.h"
 #include <arch/AMD64/cpu/cpu.h>
 #include <kernel/mm/kalloc.h>
 
@@ -21,7 +19,7 @@ extern struct X86_CPU_self_t* X86_CPU_get_self(void) {
 }
 
 extern void X86_CPU_create_self() {
-    struct X86_CPU_self_t* cpu_self = (struct X86_CPU_self_t*)MMU_make_addr_half(kalloc(sizeof(struct X86_CPU_self_t)), MMU_addr_kernel_half);
+    struct X86_CPU_self_t* cpu_self = (struct X86_CPU_self_t*)kalloc(sizeof(struct X86_CPU_self_t));
     cpu_self->self = cpu_self;
     cpu_self->cpuID = X86_CPU_get_cpuid();
     //set GDT and IDT

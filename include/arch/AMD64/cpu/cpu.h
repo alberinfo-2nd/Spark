@@ -1,7 +1,6 @@
 #ifndef CPU_H
 #define CPU_H
 
-#include "kernel/debug/log.h"
 #include <types.h>
 #include <arch/AMD64/cpu/gdt.h>
 #include <arch/AMD64/cpu/idt.h>

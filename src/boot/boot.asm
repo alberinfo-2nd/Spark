@@ -210,8 +210,6 @@ higher_half:
     mov rdi, HIGHER_HALF_ADDR
     add rdi, rbx
 
-    mov rsi, qword PML4+HIGHER_HALF_ADDR
-
     call kentry
 
     cli

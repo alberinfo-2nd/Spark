@@ -3,6 +3,7 @@
 #include <arch/AMD64/mmu/mmu.h>
 #include <kernel/mm/kalloc.h>
 #include <kernel/debug/log.h>
+#include <arch/AMD64/cpu/cpu.h>
 
 #define max(a, b) (a > b ? a : b)
 #define nodeHeight(node) (node ? node->height : -1)
@@ -47,7 +48,8 @@ struct AVL_node_t* AVL_search(struct AVL_node_t* node, u64 key) {
 
 //Finds node whose key is closest to the one provided (but still bigger). Can return null if there is no match or if tree is empty
 struct AVL_node_t* AVL_search_closest(struct AVL_node_t* node, u64 key) {
-    struct AVL_node_t* best_match = NULL;
+    if(node == NULL) return NULL;
+    struct AVL_node_t* best_match = node;
 
     while(node) {
         if(node->key <= best_match->key && node->key >= key) best_match = node;
@@ -208,7 +210,6 @@ void VMM_add_range(struct VMM_Address_Space_t* address_space, u64 address, u64 s
     range->sizeNode = AVL_insert(address_space->size_tree, range, size);
 }
 
-//WHAT DO I DO WITH THE NEW ADDRESS SPACE?!?!?! Pass it along to a scheduler, of course...
 void VMM_init(void) {
     struct VMM_Address_Space_t* address_space = kalloc(sizeof(struct VMM_Address_Space_t));
     address_space->CR3 = MMU_get_cr3();
@@ -217,6 +218,10 @@ void VMM_init(void) {
     
     //Populates the address space
     MMU_travel_address_space(address_space);
+
+    // kalloc_init();
+
+    X86_CPU_get_self()->address_space = address_space;
     return;
 }
 
@@ -232,12 +237,84 @@ struct VMM_Address_Space_t* VMM_create_address_space(void) {
     return address_space;
 }
 
-//VMM_getCurrentAddressSpace??
+struct VMM_Address_Space_t* VMM_get_current_address_space(void) {
+    return X86_CPU_get_self()->address_space;
+}
+
+//Allocates n bytes within the provided address space. Each memory type has some default options enforced
+//(Such as being read-only, MMIO being uncacheable, etc), which may be overridden by the flags parameter (uses MMU_FLAG_*)
+//page_size uses MMU_PAGE_X as size
+void* VMM_alloc(struct VMM_Address_Space_t* address_space, u64 size, u8 type, u32 flags, u32 page_size) {
+    if((size & ~(MMU_PAGE_4K-1)) != size) return NULL; //We dont deal with sizes that are not aligned to at least a 4KiB page, or smaller than that
+
+    if(type > VMM_TYPE_RESERVED) return NULL; //Unknown VMM_TYPE
+
+    if(address_space == NULL) address_space = VMM_get_current_address_space(); //Maybe also check if the address space is valid / real?
+
+    struct AVL_node_t* node = AVL_search_closest(address_space->size_tree->root, size);
+    if(node == NULL) return NULL; //NO SPACE!!!!
+
+    //Delete-reinsert, but check if that is needed 100% of the time
+    struct Address_space_range_t* range = node->range;
+    u64 newsize = node->key - size; //AVL_search_closest will always return a key that is >= to size 
+    u64 newaddress = range->addressNode->key + size;
+    void* ptr = (void*)range->addressNode->key;
+
+    AVL_delete(address_space->size_tree, node);
+    range->sizeNode = AVL_insert(address_space->size_tree, range, newsize); //Size of this range is equal to (previous size - allocated size)
+
+    AVL_delete(address_space->address_tree, range->addressNode);
+    range->addressNode = AVL_insert(address_space->address_tree, range, newaddress);
+
+    switch(type) {
+        case VMM_TYPE_DYNAMIC:
+            break;
+        case VMM_TYPE_BACKED:
+            void* phys = PMM_alloc_aligned(size, page_size);
+            if(phys == NULL) {} //Out of memory, I guess. What do we do?
+            int res = MMU_map_range(NULL, phys, ptr, size, page_size, flags, type);
+            if(res != 0) {} //There was an error mapping. What do we do?
+            break;
+        default:
+            //Either does not go here or its not implemented yet
+            break;
+    }
+
+    return ptr;
+}
+
+
+//
+// 
+// Returns 0 when succesfully freed
+// Returns 1 when a parameter is wrong
+// 
+// 
+
+int VMM_free(struct VMM_Address_Space_t *address_space, void *ptr, u64 size) {
+    if((size & ~(MMU_PAGE_4K-1)) != size) return 1;
+    if(address_space == NULL) address_space = VMM_get_current_address_space();
+
+    AVL_trasverse_inorder(address_space->address_tree->root);
+
+    struct AVL_node_t* higher_bound = AVL_search_closest(address_space->address_tree->root, (u64)ptr+size);
+    struct AVL_node_t* lower_bound = AVL_search_closest(address_space->address_tree->root, (u64)ptr);
+
+    if(higher_bound && higher_bound->key <= (u64)ptr+size) return 1; //Its not possible for either ptr or size to be right, because there is a free address range starting before the range provided to VMM_free
+    if(lower_bound && lower_bound->key + lower_bound->range->sizeNode->key >= (u64)ptr && lower_bound->key <= (u64)ptr) return 1; //Same as above but for the lower end
+
+    VMM_add_range(address_space, (u64)ptr, size);
+
+    return 0;
+}
+
 //VMM_deleteAddressSpace
 //VMM_switchAddressSpace??
 //VMM_populateAddressSpace
-//VMM_alloc
-//VMM_free
+//VMM_reserve?? -- Kind of like alloc but does more so on a separate non-active virtual address space, whereas VMM_alloc will always access the current address space
 //+ something like VMM_swapPage & VMM_bringSwap
+
+//TODO: How do you keep track of which physical addresses are reserved to a virtual address?
+// such that you dont have to go on (at worst) 4KiB increments and perform a table walk for each step in the range...
 
 //TODO: Merge addresses, maybe checking with a scheduler when there is free time to do so?

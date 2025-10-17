@@ -80,7 +80,7 @@ void PMM_add_block(void* addr, u64 size) {
         if(MMU_get_paddr(NULL, addr) == NULL) {
             //Map 4KiB from the start of addr until the end of the bitmap. covers around 128MiB
             //What do we do if the new address is not aligned to 4KiB? Not handled as of now. TODO
-            u8 res = MMU_map_range(NULL, MMU_make_addr_half(addr, MMU_addr_lower_half), addr, align(bitmap_size, MMU_PAGE_4K), MMU_PAGE_4K, MMU_FLAG_RW | MMU_FLAG_SUPERVISOR | MMU_FLAG_PRESENT);
+            u8 res = MMU_map_range(NULL, MMU_make_addr_half(addr, MMU_addr_lower_half), addr, align(bitmap_size, MMU_PAGE_4K), MMU_PAGE_4K, MMU_FLAG_RW | MMU_FLAG_SUPERVISOR | MMU_FLAG_PRESENT, 0);
             if(res != 0) return; //Cannot map address, for now.
         }
     }

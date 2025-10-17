@@ -24,8 +24,8 @@
 void MMU_init(void);
 void* MMU_get_cr3(void);
 void MMU_switch_cr3(void* PML4); //Switches the current address space in the respective cpu
-u8 MMU_map_page(void* address_space, void* paddr, void* vaddr, u32 page_size, u32 flags);
-u8 MMU_map_range(void* address_space, void* paddr, void* vaddr, u64 size, u32 page_size, u32 flags);
+u8 MMU_map_page(void* address_space, void* paddr, void* vaddr, u32 page_size, u32 flags, u16 Available);
+u8 MMU_map_range(void* address_space, void* paddr, void* vaddr, u64 size, u32 page_size, u32 flags, u16 Available);
 void MMU_unmap(void* address_space, void* vaddr);
 void* MMU_get_paddr(void* address_space, void* vaddr);
 void MMU_invlpg(void* vaddr); //INVLPG will always execute on the current address space

@@ -1,7 +1,6 @@
-#include "arch/AMD64/cpu/cpu.h"
-#include "arch/AMD64/mmu/mmu.h"
-#include "kernel/mm/kalloc.h"
 #include <arch/AMD64/cpu/idt.h>
+#include <arch/AMD64/cpu/cpu.h>
+#include <kernel/mm/kalloc.h>
 
 #define DPL_KERNEL  0
 #define DPL_USER    0b11
@@ -164,7 +163,7 @@ void X86_IDT_setup(struct IDT_t* IDT) {
 }
 
 void X86_IDT_install(bool is_bootcore, u32 cpuId) {
-    struct IDT_t* IDT = MMU_make_addr_half(kalloc(sizeof(struct IDT_t)), MMU_addr_kernel_half);
+    struct IDT_t* IDT = kalloc(sizeof(struct IDT_t));
     X86_IDT_setup(IDT);
     X86_CPU_get_self()->idt = IDT;
 

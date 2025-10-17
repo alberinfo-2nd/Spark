@@ -3,6 +3,6 @@
 
 #include <types.h>
 
-extern void kentry(void* multiboot_data, void* PML4);
+extern void kentry(void* multiboot_data);
 
 #endif

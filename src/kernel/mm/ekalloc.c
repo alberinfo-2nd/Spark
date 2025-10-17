@@ -1,3 +1,4 @@
+#include "arch/AMD64/mmu/mmu.h"
 #include <kernel/mm/ekalloc.h>
 #include <kernel/mm/pmm.h>
 
@@ -12,7 +13,7 @@ bool finished_lock = false; //If set to true, then kill the early kernel allocat
 //Grab a new page from the PMM
 void ekalloc_expand(void) {
     remaining_space = PMM_map_size;
-    ptr = PMM_alloc_aligned(PMM_map_size, 0); //TODO: Maybe the address is not mapped into the address space!!
+    ptr = MMU_make_addr_half(PMM_alloc_aligned(PMM_map_size, 0), MMU_addr_kernel_half); //TODO: Maybe the address is not mapped into the address space!!
 }
 
 void* ekalloc(u32 size) {

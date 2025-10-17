@@ -1,8 +1,6 @@
-#include "arch/AMD64/cpu/cpu.h"
-#include "arch/AMD64/mmu/mmu.h"
-#include "kernel/debug/log.h"
-#include "kernel/mm/kalloc.h"
 #include <arch/AMD64/cpu/gdt.h>
+#include <arch/AMD64/cpu/cpu.h>
+#include <kernel/mm/kalloc.h>
 
 #define GDT_SEGMENT_ACCESSED 1 << 0
 #define GDT_SEGMENT_RW 1 << 1
@@ -61,7 +59,7 @@ void X86_GDT_setup(struct GDT_t* GDT) {
 }
 
 void X86_GDT_install(void) {
-    struct GDT_t* GDT = MMU_make_addr_half(kalloc(sizeof(struct GDT_t)), MMU_addr_kernel_half);
+    struct GDT_t* GDT = kalloc(sizeof(struct GDT_t));
     X86_GDT_setup(GDT);
     X86_CPU_get_self()->gdt = GDT;
 
