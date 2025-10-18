@@ -1,6 +1,6 @@
-#include "arch/AMD64/mmu/mmu.h"
 #include <kernel/mm/ekalloc.h>
 #include <kernel/mm/pmm.h>
+#include <arch/AMD64/mmu/mmu.h>
 
 //TODO: Maybe give back the data allocated to the normal kernel allocator? problem is early kernel allocator has no metadata, so it is a bit hard. And probably useless
 

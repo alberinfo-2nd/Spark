@@ -10,9 +10,6 @@
 //Only used for the kernel, usermode will store its own information within a thread
 struct X86_CPU_self_t {
     struct X86_CPU_self_t* self;
-    struct GDT_t* gdt;
-    struct IDT_t* idt;
-    struct TSS_t* tss;
     struct VMM_Address_Space_t* address_space;
     u32 cpuID; //Apic ID, preferably
     // + possibly more data, such as IOAPIC, LAPIC, a pointer to the numa domain, tsc / timer info, etc

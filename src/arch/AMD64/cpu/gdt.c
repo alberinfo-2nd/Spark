@@ -61,8 +61,13 @@ void X86_GDT_setup(struct GDT_t* GDT) {
 void X86_GDT_install(void) {
     struct GDT_t* GDT = kalloc(sizeof(struct GDT_t));
     X86_GDT_setup(GDT);
-    X86_CPU_get_self()->gdt = GDT;
 
     asm volatile("lgdt (%0)" : : "r" (&GDT->ptr));
     return;
+}
+
+struct GDTR_t X86_GDT_get_ptr(void) {
+    struct GDTR_t GDT = {};
+    asm volatile("sgdt %0" : : "m" (GDT) : "memory");
+    return GDT;
 }

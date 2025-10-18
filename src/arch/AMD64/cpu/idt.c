@@ -2,6 +2,8 @@
 #include <arch/AMD64/cpu/cpu.h>
 #include <kernel/mm/kalloc.h>
 
+#define IDT_ENTRIES 64 //256 maximum interrupt vectors
+
 #define DPL_KERNEL  0
 #define DPL_USER    0b11
 
@@ -82,7 +84,7 @@ struct IDT_Gate_t {
 } __attribute__((packed));
 
 struct IDT_t {
-    struct IDT_Gate_t entries[256];
+    struct IDT_Gate_t entries[IDT_ENTRIES];
     struct IDTR_t ptr;
 } __attribute__((packed)) __attribute__((aligned(0x20))); //Align to Doubleword (32-bits)
 
@@ -162,12 +164,16 @@ void X86_IDT_setup(struct IDT_t* IDT) {
     return;
 }
 
-void X86_IDT_install(bool is_bootcore, u32 cpuId) {
+void X86_IDT_install() {
     struct IDT_t* IDT = kalloc(sizeof(struct IDT_t));
     X86_IDT_setup(IDT);
-    X86_CPU_get_self()->idt = IDT;
 
-    asm volatile("lidt (%0)" : : "r" ((u64)&IDT->ptr));
-
+    asm volatile("lidt (%0)" : : "r" (&IDT->ptr));
     return;
+}
+
+struct IDTR_t X86_IDT_get_ptr(void) {
+    struct IDTR_t IDT = {};
+    asm volatile("sidt %0" : : "m" (IDT) : "memory");
+    return IDT;
 }
