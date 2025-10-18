@@ -251,8 +251,6 @@ u8 MMU_map_page(void *address_space, void *paddr, void *vaddr, u32 page_size, u3
 
 u8 MMU_map_range(void *address_space, void *paddr, void *vaddr, u64 size, u32 page_size, u32 flags) {
     while(size) {
-        DEBUG_log((const string)"MMU_map_range; paddr: %x, vaddr: %x, page size: %x, size: %x\0", paddr, vaddr, page_size, size);
-
         if(size < page_size) {
             size = page_size;
             page_size = MMU_PAGE_4K;

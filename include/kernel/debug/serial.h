@@ -5,6 +5,6 @@
 #include <stdarg.h>
 
 void DEBUG_SERIAL_init(void);
-void DEBUG_SERIAL_write_str(string format, va_list args);
+void DEBUG_SERIAL_write_str(const char* format, va_list args);
 
 #endif
