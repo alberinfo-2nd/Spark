@@ -3,6 +3,6 @@
 
 #include <types.h>
 
-void DEBUG_log(string str, ...);
+void DEBUG_log(const char* str, ...);
 
 #endif

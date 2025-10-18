@@ -3,6 +3,6 @@
 #include <kernel/panic/panic.h>
 
 void isr_handler(struct ISF_t* regs) {
-    kpanic((const string)"UNHANDLED ISR", regs);
+    kpanic("UNHANDLED ISR", regs);
     return;
 }

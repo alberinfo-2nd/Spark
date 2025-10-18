@@ -50,7 +50,7 @@ void DEBUG_SERIAL_write(char c) {
     outportb(SERIAL_COM1, c);
 }
 
-void DEBUG_SERIAL_write_str(string format, va_list args) {
+void DEBUG_SERIAL_write_str(const char* format, va_list args) {
     while(*format) {
         switch (*format) {
             case '%':
@@ -63,11 +63,11 @@ void DEBUG_SERIAL_write_str(string format, va_list args) {
                         DEBUG_SERIAL_write((char)va_arg(args, int));
                         break;
                     case 's':
-                        DEBUG_SERIAL_write_str((string)va_arg(args, void*), args);
+                        DEBUG_SERIAL_write_str(va_arg(args, void*), args);
                         break;
                     case 'X':
                     case 'x':
-                        DEBUG_SERIAL_write_str((const string)"0x\0", args);
+                        DEBUG_SERIAL_write_str("0x\0", args);
 
                         u8 mask_move_count = 64 - 4; //From the start move everything except the most significant nibble
 
