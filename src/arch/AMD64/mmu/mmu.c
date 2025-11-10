@@ -11,9 +11,18 @@
 #define PD_idx(x)   ((u64)x >> 21) & 0x1FF
 #define PT_idx(x)   ((u64)x >> 12) & 0x1FF
 
-#define MMU_ENTRY_PRESENT 1
-#define MMU_ENTRY_PS 1 << 7
-//And possibly more flags, not necessary as of now...
+#define MMU_ENTRY_PRESENT       1 << 0
+#define MMU_ENTRY_RW            1 << 1
+#define MMU_ENTRY_SUPERVISOR    1 << 2
+#define MMU_ENTRY_PWT           1 << 3
+#define MMU_ENTRY_PCD           1 << 4
+#define MMU_ENTRY_ACCESSED      1 << 5
+#define MMU_ENTRY_DIRTY         1 << 6
+#define MMU_ENTRY_PAT           1 << 7
+#define MMU_ENTRY_PS            1 << 7
+#define MMU_ENTRY_GLOBAL        1 << 8
+#define MMU_ENTRY_PAT_BP        1 << 12 //PAT flag on big pages, 2MB and up
+#define MMU_ENTRY_NX            1ULL << 63
 
 #define align(x, y) ((u64)x & ~((u64)y-1))
 
@@ -130,19 +139,20 @@ inline void *MMU_make_addr_half(void *addr, int half) {
 //The following functions are helpers to map the flags into the entry fields, since bitfields are slower and honestly just bad.
 
 #define flag_n(x, flag, n) (int)((bool)(x & flag)) * n
+#define get_flag_n(x, flag) flag_n(x, flag, flag)
 
 inline void set_PTe(struct PageEntry_t *entry, u64 addr, u32 flags, u16 Available) {
-    entry->raw = addr | flag_n(flags, MMU_FLAG_NX, (u64)1 << 63) | flag_n(flags, MMU_FLAG_GLOBAL, 1 << 8) | flag_n(flags, MMU_FLAG_PAT, 1 << 7) | flag_n(flags, MMU_FLAG_PCD, 1 << 4) | flag_n(flags, MMU_FLAG_PWT, 1 << 3) | flag_n(flags, MMU_FLAG_SUPERVISOR, 1 << 2) | flag_n(flags, MMU_FLAG_RW, 1 << 1) | flag_n(flags, MMU_FLAG_PRESENT, 1);
+    entry->raw = addr | flag_n(flags, MMU_FLAG_NX, MMU_ENTRY_NX) | flag_n(flags, MMU_FLAG_GLOBAL, MMU_ENTRY_GLOBAL) | flag_n(flags, MMU_FLAG_PAT, MMU_ENTRY_PAT) | flag_n(flags, MMU_FLAG_PCD, MMU_ENTRY_PCD) | flag_n(flags, MMU_FLAG_PWT, MMU_FLAG_PWT) | flag_n(flags, MMU_FLAG_SUPERVISOR, MMU_FLAG_SUPERVISOR) | flag_n(flags, MMU_FLAG_RW, MMU_ENTRY_RW) | flag_n(flags, MMU_FLAG_PRESENT, MMU_ENTRY_PRESENT);
     entry->raw |= (Available & ((1 << 4) - 1)) << 9 | (u64)((Available >> 3) & ((1 << 12) - 1)) << 52;
 }
 
 inline void set_PDe(struct PageEntry_t *entry, u64 addr, u32 flags, u16 Available) {
-    entry->raw = addr | flag_n(flags, MMU_FLAG_NX, (u64)1 << 63) | flag_n(flags, MMU_FLAG_PAT, 1 << 12) | flag_n(flags, MMU_FLAG_GLOBAL, 1 << 8) | 1 << 7 | flag_n(flags, MMU_FLAG_PCD, 1 << 4) | flag_n(flags, MMU_FLAG_PWT, 1 << 3) | flag_n(flags, MMU_FLAG_SUPERVISOR, 1 << 2) | flag_n(flags, MMU_FLAG_RW, 1 << 1) | flag_n(flags, MMU_FLAG_PRESENT, 1);
+    entry->raw = addr | flag_n(flags, MMU_FLAG_NX, MMU_ENTRY_NX) | flag_n(flags, MMU_FLAG_PAT, MMU_ENTRY_PAT_BP) | flag_n(flags, MMU_FLAG_GLOBAL, MMU_ENTRY_GLOBAL) | MMU_ENTRY_PS | flag_n(flags, MMU_FLAG_PCD, MMU_ENTRY_PCD) | flag_n(flags, MMU_FLAG_PWT, MMU_FLAG_PWT) | flag_n(flags, MMU_FLAG_SUPERVISOR, MMU_FLAG_SUPERVISOR) | flag_n(flags, MMU_FLAG_RW, MMU_ENTRY_RW) | flag_n(flags, MMU_FLAG_PRESENT, MMU_ENTRY_PRESENT);
     entry->raw |= (Available & ((1 << 4) - 1)) << 9 | (u64)((Available >> 3) & ((1 << 12) - 1)) << 52;
 }
 
 inline void set_PDPTe(struct PageEntry_t *entry, u64 addr, u32 flags, u16 Available) {
-    entry->raw = addr | flag_n(flags, MMU_FLAG_NX, (u64)1 << 63) | flag_n(flags, MMU_FLAG_PAT, 1 << 12) | flag_n(flags, MMU_FLAG_GLOBAL, 1 << 8) | 1 << 7 | flag_n(flags, MMU_FLAG_PCD, 1 << 4) | flag_n(flags, MMU_FLAG_PWT, 1 << 3) | flag_n(flags, MMU_FLAG_SUPERVISOR, 1 << 2) | flag_n(flags, MMU_FLAG_RW, 1 << 1) | flag_n(flags, MMU_FLAG_PRESENT, 1);
+    entry->raw = addr | flag_n(flags, MMU_FLAG_NX, MMU_ENTRY_NX) | flag_n(flags, MMU_FLAG_PAT, MMU_ENTRY_PAT_BP) | flag_n(flags, MMU_FLAG_GLOBAL, MMU_ENTRY_GLOBAL) | MMU_ENTRY_PS | flag_n(flags, MMU_FLAG_PCD, MMU_ENTRY_PCD) | flag_n(flags, MMU_FLAG_PWT, MMU_FLAG_PWT) | flag_n(flags, MMU_FLAG_SUPERVISOR, MMU_FLAG_SUPERVISOR) | flag_n(flags, MMU_FLAG_RW, MMU_ENTRY_RW) | flag_n(flags, MMU_FLAG_PRESENT, MMU_ENTRY_PRESENT);
     entry->raw |= (Available & ((1 << 4) - 1)) << 9 | (u64)((Available >> 3) & ((1 << 12) - 1)) << 52;
 }
 
@@ -253,7 +263,7 @@ void* MMU_get_paddr(void* address_space, void* vaddr) {
 void MMU_travel_address_space(struct VMM_Address_Space_t* address_space) {
     if(address_space == NULL) return;
 
-    const int maxRange = MMU_PAGE_4K/sizeof(u64);
+    const int maxRange = sizeof(struct PT_t)/sizeof(struct PageEntry_t);
     
     struct PML4_t* PML4 = (struct PML4_t*)address_space->CR3;
     u64 rangeAddress = 0;
@@ -261,7 +271,7 @@ void MMU_travel_address_space(struct VMM_Address_Space_t* address_space) {
     for(int PML4_idx = 0; PML4_idx < maxRange; PML4_idx++) {
         //If the sign extension between the address range we are currently looking at and the page at PML4[PML4_idx] are different (Lower half vs higher half)
         if (idx_to_vaddr(PML4_idx, 0, 0, 0) >> vaddr_length != rangeAddress >> vaddr_length) {
-            if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
+            if(rangeSize) VMM_add_free_range(address_space, rangeAddress, rangeSize);
             rangeAddress = idx_to_vaddr(PML4_idx, 0, 0, 0);
             rangeSize = 0;
         }
@@ -280,7 +290,7 @@ void MMU_travel_address_space(struct VMM_Address_Space_t* address_space) {
             }
 
             if(PDPT->entries[PDPT_idx].raw & MMU_ENTRY_PS) {
-                if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
+                if(rangeSize) VMM_add_free_range(address_space, rangeAddress, rangeSize);
                 rangeAddress = idx_to_vaddr(PML4_idx, (PDPT_idx+1), 0, 0);
                 rangeSize = 0;
                 continue;
@@ -295,7 +305,7 @@ void MMU_travel_address_space(struct VMM_Address_Space_t* address_space) {
                 }
 
                 if(PD->entries[PD_idx].raw & MMU_ENTRY_PS) {
-                    if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
+                    if(rangeSize) VMM_add_free_range(address_space, rangeAddress, rangeSize);
                     rangeAddress = idx_to_vaddr(PML4_idx, PDPT_idx, (PD_idx+1), 0);
                     rangeSize = 0;
                     continue;
@@ -309,7 +319,7 @@ void MMU_travel_address_space(struct VMM_Address_Space_t* address_space) {
                         continue;
                     }
 
-                    if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
+                    if(rangeSize) VMM_add_free_range(address_space, rangeAddress, rangeSize);
                     rangeAddress = idx_to_vaddr(PML4_idx, PDPT_idx, PD_idx, (PT_idx+1));
                     rangeSize = 0;
                 }
@@ -320,80 +330,8 @@ void MMU_travel_address_space(struct VMM_Address_Space_t* address_space) {
         /* ------------------------------------------------------ */
     }
 
-    if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
+    if(rangeSize) VMM_add_free_range(address_space, rangeAddress, rangeSize);
 }
 
-// void MMU_copy_address_space(struct VMM_Address_Space_t* old_address_space, struct VMM_Address_Space_t* new_address_space) {
-//     if(old_address_space == NULL || new_address_space == NULL) return;
-
-//     const int maxRange = MMU_PAGE_4K/sizeof(u64);
-    
-//     struct PML4_t* PML4 = (struct PML4_t*)address_space->CR3;
-//     u64 rangeAddress = 0;
-//     u64 rangeSize = 0;
-//     for(int PML4_idx = 0; PML4_idx < maxRange; PML4_idx++) {
-//         //If the sign extension between the address range we are currently looking at and the page at PML4[PML4_idx] are different (Lower half vs higher half)
-//         if (idx_to_vaddr(PML4_idx, 0, 0, 0) >> vaddr_length != rangeAddress >> vaddr_length) {
-//             if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
-//             rangeAddress = idx_to_vaddr(PML4_idx, 0, 0, 0);
-//             rangeSize = 0;
-//         }
-
-//         if(!PML4->entries[PML4_idx].raw) {
-//             rangeSize += (u64)MMU_PAGE_1G * 512;
-//             continue;
-//         }
-
-//         /* ------------------------------------------------------ */
-//         struct PDPT_t* PDPT = page_to_paddr(PML4->entries[PML4_idx].raw);
-//         for(int PDPT_idx = 0; PDPT_idx < maxRange; PDPT_idx++) {
-//             if(!PDPT->entries[PDPT_idx].raw) {
-//                 rangeSize += MMU_PAGE_1G;
-//                 continue;
-//             }
-
-//             if(PDPT->entries[PDPT_idx].raw & MMU_ENTRY_PS) {
-//                 if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
-//                 rangeAddress = idx_to_vaddr(PML4_idx, (PDPT_idx+1), 0, 0);
-//                 rangeSize = 0;
-//                 continue;
-//             }
-
-//             /* ------------------------------------------------------ */
-//             struct PD_t* PD = page_to_paddr(PDPT->entries[PDPT_idx].raw);
-//             for(int PD_idx = 0; PD_idx < maxRange; PD_idx++) {
-//                 if(!PD->entries[PD_idx].raw) {
-//                     rangeSize += MMU_PAGE_2M;
-//                     continue;
-//                 }
-
-//                 if(PD->entries[PD_idx].raw & MMU_ENTRY_PS) {
-//                     if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
-//                     rangeAddress = idx_to_vaddr(PML4_idx, PDPT_idx, (PD_idx+1), 0);
-//                     rangeSize = 0;
-//                     continue;
-//                 }
-
-//                 /* ------------------------------------------------------ */
-//                 struct PT_t* PT = page_to_paddr(PD->entries[PD_idx].raw);
-//                 for(int PT_idx = 0; PT_idx < maxRange; PT_idx++) {
-//                     if(!PT->entries[PT_idx].raw) {
-//                         rangeSize += MMU_PAGE_4K;
-//                         continue;
-//                     }
-
-//                     if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
-//                     rangeAddress = idx_to_vaddr(PML4_idx, PDPT_idx, PD_idx, (PT_idx+1));
-//                     rangeSize = 0;
-//                 }
-//                 /* ------------------------------------------------------ */
-//             }
-//             /* ------------------------------------------------------ */
-//         }
-//         /* ------------------------------------------------------ */
-//     }
-
-//     if(rangeSize) VMM_add_range(address_space, rangeAddress, rangeSize);
-// }
-
 //TODO: Unmap
+//TODO: MMU_copy_address_space

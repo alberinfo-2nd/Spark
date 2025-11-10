@@ -1,7 +1,8 @@
 section .text
 
-%macro swapgs_if_necessary 0
-    cmp BYTE [rsp+8], 0x8 ; Is the previous CPL = Kernel Code? (Offset 24 because there are two pushq before isr_common + the padding for the SS)
+%macro swapgs_if_necessary 1
+    ;Parameter is used in the addressing to differentiate CS stack position between interrupt stack frames with error code and without
+    cmp BYTE [rsp+8*(%1+1)], 0x8 ; Is the previous CPL = Kernel Code?
     je %%skip ; If so, there is no need to swapgs
     swapgs
 
@@ -10,23 +11,23 @@ section .text
 
 %macro ISR_NOERRCODE 1
 [GLOBAL ISR_%1]
-    swapgs_if_necessary
-    push QWORD %1 ;Error Code
-    push QWORD 0 ;Int#
+    swapgs_if_necessary 0
+    push QWORD 0 ;Error Code
+    push QWORD %1 ;Int#
     jmp isr_common
 %endmacro
 
 %macro ISR_ERRCODE 1
 [GLOBAL ISR_%1]
-    swapgs_if_necessary
-    ;The error code was already exists in the stack frame
-    push QWORD 0 ;Int#
+    swapgs_if_necessary 1
+    ;The error code already exists in the stack frame
+    push QWORD %1 ;Int#
     jmp isr_common
 %endmacro
 
 %macro IRQ 1
 [GLOBAL IRQ_%1]
-    swapgs_if_necessary
+    swapgs_if_necessary 0
     push QWORD 0 ;Error Code
     push QWORD %1 ;Int#
     jmp irq_common
@@ -114,7 +115,9 @@ isr_common:
 
     add rsp, 16 ; Clear out the two pushq's done before (pushq and error code in case of ISR_ERRCODE)
 
-    swapgs_if_necessary
+    ;Since we pushed out both Int# and the error code (whether real or not), the second param should be CS.
+    ;Therefore, we can treat this as an ISR_NOERROR
+    swapgs_if_necessary 0
     iretq
 
 extern irq_handler
@@ -154,5 +157,5 @@ irq_common:
 
     add rsp, 16 ; Clear out the two pushq's done before
 
-    swapgs_if_necessary
+    swapgs_if_necessary 0
     iretq
