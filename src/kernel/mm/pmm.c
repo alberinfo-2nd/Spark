@@ -180,7 +180,6 @@ void* PMM_alloc_aligned(u64 size, u64 alignment) {
 
                 return addr;
             }
-            return NULL;
         }
     }
 
