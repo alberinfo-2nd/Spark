@@ -8,11 +8,20 @@ SRC_DIR=./src
 INC_DIR=./include/
 
 NASMFLAGS=-f elf64 -w all
-CFLAGS=-nostdlib -lgcc -mno-sse -O2 -ffreestanding -mcmodel=kernel -mno-red-zone -Wall -Wextra -Wno-unused-function 
+CFLAGS=-nostdlib -lgcc -mno-sse -ffreestanding -mcmodel=kernel -mno-red-zone -Wall -Wextra -Wno-unused-function
 CFLAGS+=-Wfloat-equal -Wundef -Wcast-align -Wwrite-strings -Wlogical-op -Wredundant-decls
 CFLAGS+=-Wshadow -Wno-unused-parameter -Wstrict-prototypes -Wno-unused-variable -Werror
 CFLAGS+=-I $(INC_DIR)
 LDFLAGS=-N --script=src/linker.ld
+QEMUFLAGS=-serial file:serialOut.log -net none -boot d -smp 1 -m 32M --cdrom os.iso
+
+ifeq ($(DEBUG),true)
+  NASMFLAGS+= -g -F dwarf
+  CFLAGS+= -g -O0
+  QEMUFLAGS+=-s -daemonize
+else
+  CFLAGS+= -O2
+endif
 
 ASM_SOURCES=$(shell find $(SRC_DIR) -type f -name '*.asm')
 C_SOURCES=$(shell find $(SRC_DIR) -type f -name '*.c')
@@ -32,22 +41,23 @@ build: clean .WAIT $(ASM_OBJS) $(C_OBJS)
 	grub-mkrescue -o os.iso iso/
 	./objdump.sh
 
-run-bios:
-	qemu-system-x86_64 -serial file:serialOut.log -net none -boot d -smp 4 -m 32M -enable-kvm -cpu host,+invtsc --cdrom os.iso
+run-qemu-bios:
+	qemu-system-x86_64 $(QEMUFLAGS)
 
-run-uefi:
-	qemu-system-x86_64 -serial file:serialOut.log -net none -boot d -smp 4 -m 128M -enable-kvm -cpu host,+invtsc --cdrom os.iso --bios bios/OVMF.fd
+run-qemu-uefi:
+	qemu-system-x86_64 $(QEMUFLAGS) -enable-kvm -cpu host,+invtsc --bios UEFI/OVMF.fd
 
 run-bochs:
-	 bochs -f bochsrc.bxrc -dbg
+#add -dbg when ussing bochs debugger
+	bochs -f bochsrc.bxrc -q
 
 clean:
 	-rm -rf $(OBJ_DIR)
 	-rm *.iso
 	-rm *.sys
 
-all-bios: clean build run-bios
+all-qemu-bios: clean build run-qemu-bios
 
-all-uefi: clean build run-uefi
+all-qemu-uefi: clean build run-qemu-uefi
 
 all-bochs: clean build run-bochs
