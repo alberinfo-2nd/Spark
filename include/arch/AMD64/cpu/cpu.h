@@ -4,6 +4,7 @@
 #include <types.h>
 #include <arch/AMD64/cpu/gdt.h>
 #include <arch/AMD64/cpu/idt.h>
+#include <arch/AMD64/cpu/apic.h>
 #include <kernel/mm/vmm.h>
 
 //Information about this cpu. Will be expanded in the future.
@@ -11,7 +12,7 @@
 struct X86_CPU_self_t {
     struct X86_CPU_self_t* self;
     struct VMM_Address_Space_t* address_space;
-    u32 cpuID; //Apic ID, preferably
+    struct X86_APIC_t* apic;
     // + possibly more data, such as IOAPIC, LAPIC, a pointer to the numa domain, tsc / timer info, etc
 };
 
@@ -54,6 +55,12 @@ static inline void X86_CPU_wrmsr(u32 msr, u64 value) {
 static inline void X86_CPU_invlpg(void* ptr) {
     //TODO: Issue IPI to invalidate on other processors?
     asm volatile("invlpg (%0)" : : "r" (ptr) : "memory");
+}
+
+static inline bool X86_CPU_self_initialized(void) {
+    u32 ss = 0, gs = 0;
+    asm volatile("mov %%ss, %0\nmov %%gs, %1" : "=r" (ss), "=r" (gs));
+    return ss != gs;
 }
 
 extern void X86_CPU_set_cr4_bit(u8 bit);

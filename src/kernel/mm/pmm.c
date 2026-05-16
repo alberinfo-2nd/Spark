@@ -2,8 +2,8 @@
 #include <kernel/sync/spinlock.h>
 #include <arch/AMD64/cpu/cpu.h>
 #include <arch/AMD64/mmu/mmu.h>
-#include <arch/AMD64/cpu/lapic.h>
 #include <kernel/debug/log.h>
+#include <string.h>
 
 #define align(x, y) ((x+y-1) & ~(y-1)) //Aligns x to the next multiple of y
 
@@ -33,14 +33,14 @@ struct PMM_memory_block_list_t PMM_block_list = {0};
 void* PMM_init() {
     if (PMM_block_list.addr == 0) {
         //Initialize first entry
-        PMM_block_list.cpuID = X86_LAPIC_get_apic_id(); //Should be zero in the BSP, but just in case
+        PMM_block_list.cpuID = X86_CPU_get_cpuid(); //Contains the same value as the Local APIC ID at boot.
         PMM_add_block(__starting_memory, sizeof(__starting_memory));
         return &PMM_block_list;
     }
 
     SPINLOCK_acquire_lock(&PMM_block_list.lock); //Prevent the block list from being written by multiple cores at the same time...
 
-    u32 cpuID = X86_LAPIC_get_apic_id();
+    u32 cpuID = X86_CPU_get_self()->apic->ID;
     struct PMM_memory_block_list_t *block_list = &PMM_block_list;
     while(block_list->next != NULL) block_list = block_list->next;
     //TODO: Allocate memory for the next block list
@@ -53,7 +53,9 @@ void* PMM_init() {
 
 //Retrieves the block list for the current processor
 struct PMM_memory_block_list_t *get_block_list(void) {
-    u32 cpuID = X86_LAPIC_get_apic_id();
+    u32 cpuID = 0;
+    if(!X86_CPU_self_initialized()) cpuID = X86_CPU_get_cpuid();
+    else cpuID = X86_CPU_get_self()->apic->ID;
     struct PMM_memory_block_list_t *block_list = &PMM_block_list;
 
     while(block_list->cpuID != cpuID && block_list->next != NULL) block_list = block_list->next;
@@ -120,6 +122,7 @@ void* PMM_alloc_aligned(u64 size, u64 alignment) {
                 if ((u64)addr+size >= (u64)block->addr + block->size) break; //If the end of the allocation goes over the end of the block, then ignore it and try again.
                 *bmp |= (u64)1 << map_idx;
 
+                memset(addr, 0, size); //Probably not a good idea to use a builtin... Change to own implementation when some sort of string.h is implemented. TODO!
                 return addr;
             }
         } else {
@@ -178,6 +181,7 @@ void* PMM_alloc_aligned(u64 size, u64 alignment) {
                     *bmp2 |= newbitmap;
                 }
 
+                memset(addr, 0, size);
                 return addr;
             }
         }
