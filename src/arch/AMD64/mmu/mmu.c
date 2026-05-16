@@ -223,7 +223,7 @@ u8 MMU_map_page(void *address_space, void *paddr, void *vaddr, u32 page_size, u3
 
     struct PDPT_t* PDPT = page_to_paddr(PML4->PDPT[PML4_idx]);
     if (page_size == MMU_PAGE_1G) {
-        free_PDPT(PML4_idx, PDPT);
+        free_PD(PML4_idx, PDPT_idx, PDPT->PD[PDPT_idx]);
         set_PDPTe(&PDPT->entries[PDPT_idx], (u64)paddr, flags, Available);
         return 0;
     }
@@ -236,7 +236,7 @@ u8 MMU_map_page(void *address_space, void *paddr, void *vaddr, u32 page_size, u3
 
     struct PD_t* PD = page_to_paddr(PDPT->PD[PDPT_idx]);
     if (page_size == MMU_PAGE_2M) {
-        free_PD(PML4_idx, PDPT_idx, PD);
+        free_PT(PML4_idx, PDPT_idx, PDPT_idx, PD->PT[PDPT_idx]);
         set_PDe(&PD->entries[PD_idx], (u64)paddr, flags, Available);
         return 0;
     }
@@ -248,7 +248,7 @@ u8 MMU_map_page(void *address_space, void *paddr, void *vaddr, u32 page_size, u3
     }
 
     struct PT_t* PT = page_to_paddr(PD->PT[PD_idx]);
-    free_PT(PML4_idx, PDPT_idx, PD_idx, PT);
+    if(PT->entries[PT_idx].raw) X86_CPU_invlpg((void*)idx_to_vaddr(PML4_idx, PDPT_idx, PDPT_idx, PT_idx));
     set_PTe(&PT->entries[PT_idx], (u64)paddr, flags, Available);
 
     return 0;
