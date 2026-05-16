@@ -14,8 +14,26 @@
 #define leftLeaning(node) (balance(node) > 1)
 #define rightLeaning(node) (balance(node) < -(i8)1)
 
+#define VMM_STATUS_RAM_FREE         0 //RAM memory - Free to be used
+#define VMM_STATUS_RAM_ALLOCATED    1 //RAM memory - Backed by a page
+#define VMM_STATUS_RAM_SWAP         2 //RAM memory - Sent to swap
+#define VMM_STATUS_FILE_PRESENT     3 //Memory mapped file - currently in memory
+#define VMM_STATUS_FILE_NOTPRESENT  4 //Memory mapped file - not loaded in memory
+#define VMM_STATUS_UNUSABLE         5 //Unusable memory - MMIO, DMA, etc. Could also be RAM that is backed by a page, therefore becoming unusable
+
+//Defines a link between 1 Virtual range and n physical pages.
+//TODO: Possibly change to some type of tree afterwards?
+struct Address_space_page_t {
+    struct Address_space_page_t* next;
+    u64 vaddr;
+    u64 paddr;
+    u64 size;
+};
+
 struct Address_space_range_t {
     struct Address_space_range_t* next; //Next range, sorted by address. includes both free and allocated ranges
+    struct Address_space_page_t* physical_pages; //All of the physical pages backing this virtual memory range
+    struct Address_space_page_t* last_physical_page;
 
     u64 address;
     u64 size;
@@ -26,7 +44,8 @@ struct Address_space_range_t {
     u32 page_size;
 
     u8 type;
-    //Status?
+    u8 status;
+
     //File?
 };
 
@@ -247,10 +266,18 @@ void AVL_trasverse_inorder(struct AVL_node_t* node) {
 
 void VMM_add_free_range(struct VMM_Address_Space_t* address_space, u64 address, u64 size) {
     struct Address_space_range_t* range = kalloc(sizeof(struct Address_space_range_t));
-    // range->addressNode = AVL_insert(address_space->address_tree, range, address);
-    // range->sizeNode = AVL_insert(address_space->size_tree, range, size);
+    range->next = NULL;
     range->address = address;
     range->size = size;
+    range->page_size = 0;
+
+    range->type = VMM_TYPE_RAM;
+    range->status = VMM_STATUS_RAM_FREE;
+
+    range->physical_pages = NULL;
+    range->last_physical_page = NULL;
+    
+
     AVL_insert(address_space->size_tree, range, size);
     struct AVL_node_t* previousNode = AVL_search_closest_lower(address_space->address_tree->root, address);
     if(previousNode == NULL) {
@@ -263,16 +290,41 @@ void VMM_add_free_range(struct VMM_Address_Space_t* address_space, u64 address, 
     while(previousRange->next && previousRange->next->address < address) previousRange = previousRange->next;
     range->next = previousRange->next;
     previousRange->next = range;
+}
 
+void VMM_range_push_physical_page(struct Address_space_range_t* range, u64 paddr, u64 vaddr, u64 size) {
+    struct Address_space_page_t* newPage = kalloc(sizeof(struct Address_space_page_t));
+    newPage->next = NULL;
+    newPage->paddr = paddr;
+    newPage->vaddr = vaddr;
+    newPage->size = size;
+
+    if(range->physical_pages == NULL) range->physical_pages = range->last_physical_page = newPage;
+    range->last_physical_page->next = newPage;
+    range->last_physical_page = range->last_physical_page->next;
+}
+
+void VMM_range_pop_physical_pages(struct VMM_Address_Space_t* address_space, struct Address_space_range_t* range) {
+    if(address_space != NULL) MMU_unmap_range(address_space->CR3, (void*)range->address, range->size);
+
+    for(struct Address_space_page_t* currPage = range->physical_pages; currPage != NULL; currPage = currPage->next) {
+        PMM_free((void*)currPage->paddr, currPage->size);
+        kfree(currPage);
+    }
+
+    range->physical_pages = NULL;
 }
 
 void VMM_init(void) {
     struct VMM_Address_Space_t* address_space = kalloc(sizeof(struct VMM_Address_Space_t));
     address_space->CR3 = MMU_get_cr3();
     address_space->address_tree = kalloc(sizeof(struct AVL_tree_t));
+    address_space->address_tree->root = NULL;
     address_space->size_tree = kalloc(sizeof(struct AVL_tree_t));
-    
-    //TODO: Make it also adds the currently allocated areas....??? its not really necessary but would be a good addition
+    address_space->size_tree->root = NULL;
+    address_space->range_list = NULL;
+
+    //TODO: Make it also add the currently allocated areas....??? its not really necessary but would be a good addition
     //Populates the address space
     MMU_travel_address_space(address_space);
 
@@ -286,7 +338,10 @@ struct VMM_Address_Space_t* VMM_create_address_space(void) {
     struct VMM_Address_Space_t* address_space = kalloc(sizeof(struct VMM_Address_Space_t));
     address_space->CR3 = PMM_alloc_aligned(MMU_PAGE_4K, 4096); //Reserve a 4KiB Page for the new PML4, that is 4K aligned
     address_space->address_tree = kalloc(sizeof(struct AVL_tree_t));
+    address_space->address_tree->root = NULL;
     address_space->size_tree = kalloc(sizeof(struct AVL_tree_t));
+    address_space->size_tree->root = NULL;
+    address_space->range_list = NULL;
 
     //TODO: COPY CR3!!!!!
     //Populates the address space
@@ -298,11 +353,21 @@ struct VMM_Address_Space_t* VMM_get_current_address_space(void) {
     return X86_CPU_get_self()->address_space;
 }
 
+void VMM_destroy_address_space(struct VMM_Address_Space_t* address_space) {
+    //Providing the address space is unneded, as all mappings will be inmediately undone the moment CR3 is freed from memory.
+    //TODO: Check if memory allocated for tables that are not CR3 are actually free'd
+    for(struct Address_space_range_t* currRange = address_space->range_list; currRange != NULL; currRange = currRange->next) {
+        VMM_range_pop_physical_pages(address_space, currRange);
+    }
+
+    //TODO: Liberate other resources such as files, MMIOs and so on.
+}
+
 //Allocates n bytes within the provided address space. Each memory type has some default options enforced
 //(Such as being read-only, MMIO being uncacheable, etc), which may be overridden by the flags parameter (uses MMU_FLAG_*)
 //page_size uses MMU_PAGE_X as size
 void* VMM_alloc(struct VMM_Address_Space_t* address_space, u64 size, u8 type, u32 flags, u32 page_size) {
-    if((size & ~(MMU_PAGE_4K-1)) != size) return NULL; //We dont deal with sizes that are not aligned to at least a 4KiB page, or smaller than that
+    if((size & ~(MMU_PAGE_4K-1)) != size) return NULL; //We dont deal with sizes that are not aligned to at least a 4KiB page
 
     if(type > VMM_TYPE_RESERVED) return NULL; //Unknown VMM_TYPE
 
@@ -323,11 +388,17 @@ void* VMM_alloc(struct VMM_Address_Space_t* address_space, u64 size, u8 type, u3
 
     //TODO: Check if flags are correct
     struct Address_space_range_t* newRange = kalloc(sizeof(struct Address_space_range_t));
+    newRange->next = NULL;
     newRange->address = (u64)ptr;
     newRange->size = size;
-    newRange->flags = flags;
-    newRange->type = type;
     newRange->page_size = page_size;
+
+    newRange->type = type;
+    newRange->status = VMM_STATUS_RAM_FREE;
+    newRange->flags = flags;
+
+    newRange->physical_pages = NULL;
+    newRange->last_physical_page = NULL;
 
     struct AVL_node_t* newNode = AVL_insert(address_space->address_tree, newRange, newRange->address);
     struct AVL_node_t* previousNode = AVL_get_predecessor(newNode);
@@ -342,16 +413,32 @@ void* VMM_alloc(struct VMM_Address_Space_t* address_space, u64 size, u8 type, u3
     }
 
     switch(type) {
-        case VMM_TYPE_DYNAMIC:
+        case VMM_TYPE_RAM:
+            newRange->status = VMM_STATUS_RAM_FREE;
             break;
-        case VMM_TYPE_BACKED:
+        case VMM_TYPE_RAM_BACKED:
+            newRange->status = VMM_STATUS_RAM_ALLOCATED;
+
             void* phys = PMM_alloc_aligned(size, page_size);
             if(phys == NULL) {} //Out of memory, I guess. What do we do?
             int res = MMU_map_range(NULL, phys, ptr, size, page_size, flags | MMU_FLAG_PRESENT, 0);
             if(res != 0) {} //There was an error mapping. What do we do?
+
+            VMM_range_push_physical_page(newRange, (u64)phys, (u64)ptr, size);
+            break;
+        case VMM_TYPE_MMIO:
+            newRange->status = VMM_STATUS_UNUSABLE;
+            break;
+        case VMM_TYPE_FILE:
+            //files are also AOW, therefore status switches to VMM_STATUS_FILE_PRESENT once the page fault rises
+            newRange->status = VMM_STATUS_FILE_NOTPRESENT;
+            break;
+        case VMM_TYPE_RESERVED:
+            newRange->status = VMM_STATUS_UNUSABLE;
             break;
         default:
             //Either does not go here or its not implemented yet
+            //Kill process, or panic!
             break;
     }
 
@@ -373,8 +460,41 @@ int VMM_free(struct VMM_Address_Space_t *address_space, void *ptr) {
     if(node == NULL) return 1; //If the node does not exist in the address_tree, then the address was never allocated!!!
 
     struct Address_space_range_t* range = node->range;
+    switch (range->type) {
+        case VMM_TYPE_RAM:
+        case VMM_TYPE_RAM_BACKED:
+            switch(range->status) {
+                case VMM_STATUS_RAM_FREE: //The ram was never used, therefore there is nothing else we need to do. range->type cannot be TYPE_RAM_BACKED!
+                    break;
+
+                case VMM_STATUS_RAM_ALLOCATED: //This means it was AOW and it got allocated. Free the memory behind this page
+                    VMM_range_pop_physical_pages(address_space, range);
+                    break;
+
+                case VMM_STATUS_RAM_SWAP: //Memory was sent to swap
+                    break;
+
+                default:
+                    //Range is corrputed?
+            }
+            break;
+
+        case VMM_TYPE_MMIO:
+            break;
+
+        case VMM_TYPE_FILE:
+            break;
+
+        case VMM_TYPE_RESERVED:
+            break;
+
+        default:
+            //Range is corrupted?
+    }
+
     range->flags = 0;
-    range->type = 0;
+    range->type = VMM_TYPE_RAM;
+    range->status = VMM_STATUS_RAM_FREE;
     range->page_size = 0;
 
     struct AVL_node_t* predecessor = AVL_get_predecessor(node); //Previous allocated address; We can use this information to coalesce this range we are freeing with the rest
@@ -406,7 +526,7 @@ int VMM_free(struct VMM_Address_Space_t *address_space, void *ptr) {
 
     AVL_insert(address_space->size_tree, range, range->size);
 
-    //TODO: UNMAP PAGES!!
+    //Unmapping is handled by VMM_range_pop_physical_pages
     return 0;
 }
 
@@ -427,13 +547,16 @@ void VMM_page_fault_handler(void* _regs) {
     //Get current VMM_address_space
     struct VMM_Address_Space_t* address_space = X86_CPU_get_self()->address_space;
 
-    //Was the error bc of a reserved field being set?
+    //Was the PF caused by a reserved field being set?
         //YES - Fix it!
         //NO  - Nothing to see here. Go on....
     if(regs->error_code & VMM_PF_ERRCODE_RSV) {
         return;
     }
 
+    //TODO: Maybe rework logic a little bit?
+
+    //Was the PF caused by a non-present page?
     if(!(regs->error_code & VMM_PF_ERRCODE_PRESENT)) {
         //Is the area mapped in the address space?
             //YES - Is it a dynamic page?
@@ -441,25 +564,51 @@ void VMM_page_fault_handler(void* _regs) {
                 //NO  - Sus. What other flags in the error code could cause this?
             //NO  - The process is doing something funky, accessing memory not given to it. EXTERMINATE IT (TODO: Scheduler!)
 
-        //Is there a free range before the fault_address that overlaps with it?
+        //Is there an allocated range before the fault_address that overlaps with it?
         struct AVL_node_t* lower_bound = AVL_search_closest_lower(address_space->address_tree->root, fault_address);
-        if(lower_bound->key <= fault_address && lower_bound->key + lower_bound->range->size > fault_address) {
-            fault_address = align(fault_address, lower_bound->range->page_size);
-
-            void* phys = PMM_alloc_aligned(lower_bound->range->page_size, lower_bound->range->page_size);
-            if(phys == NULL) {} //Out of memory, kill that process?? or swap, but thats TODO
-            //REPLACE MMU_map_range-address_space with the processes' address space, TODO
-            int res = MMU_map_range(NULL, phys, (void*)fault_address, lower_bound->range->page_size, lower_bound->range->page_size, lower_bound->range->flags | MMU_FLAG_PRESENT, 0);
-            if(res != 0) {} //There was an error mapping. Kill that process!
-        } else {
-
+        
+        //If there is no match, or the one found does not correspond to the fault address, then kill the process.
+        if(lower_bound == NULL || !(lower_bound->key <= fault_address && lower_bound->key + lower_bound->range->size >= fault_address)) {
+            //Kill process
+            return;
         }
-    } else {
-        //Is the area mapped in the address space?
-            //YES - Was it a fetch from an NX-page, .......?
-                //YES - NO BUENO! terminate that process!
-                //NO  - ????
+        
+        fault_address = align(fault_address, lower_bound->range->page_size);
+
+        void* phys = PMM_alloc_aligned(lower_bound->range->page_size, lower_bound->range->page_size);
+        if(phys == NULL) {} //Out of memory, kill that process?? or swap, but thats TODO
+        //REPLACE MMU_map_range-address_space with the processes' address space, TODO
+        int res = MMU_map_range(address_space->CR3, phys, (void*)fault_address, lower_bound->range->page_size, lower_bound->range->page_size, lower_bound->range->flags | MMU_FLAG_PRESENT, 0);
+        if(res != 0) {} //There was an error mapping. Kill that process!
+
+        VMM_range_push_physical_page(lower_bound->range, (u64)phys, fault_address, lower_bound->range->page_size);
+
+        //TODO: What if it is a file?
+        lower_bound->range->status = VMM_STATUS_RAM_ALLOCATED;
+
+        return;
     }
+
+    //Was the PF caused by a fetch from an NX-page?
+    if(regs->error_code & VMM_PF_ERRCODE_ID) {
+        //Kill that process!
+        return;
+    }
+
+    //Was the PF caused by a protection key violation?
+    if(regs->error_code & VMM_PF_ERRCODE_PK) {
+        //TODO
+        return;
+    }
+
+    //Was the PF caused by a shadow stack access violation?
+    if(regs->error_code & VMM_PF_ERRCODE_SS) {
+        //TODO
+        return;
+    }
+
+    //Something else caused the PF, could be RMP. TODO
+    return;
 }
 
 //VMM_deleteAddressSpace
@@ -468,5 +617,4 @@ void VMM_page_fault_handler(void* _regs) {
 //VMM_reserve?? -- Kind of like alloc but does more so on a separate non-active virtual address space, whereas VMM_alloc will always access the current address space
 //+ something like VMM_swapPage & VMM_bringSwap
 
-//TODO: How do you keep track of which physical addresses are reserved to a virtual address?
-// such that you dont have to go on (at worst) 4KiB increments and perform a table walk for each step in the range...
+//TODO: Handle multiple separate processes trying to allocate the same MMIO / File / etc

@@ -3,11 +3,11 @@
 
 #include <types.h>
 
-#define VMM_TYPE_DYNAMIC 0
-#define VMM_TYPE_BACKED 1
-#define VMM_TYPE_MMIO 2
-#define VMM_TYPE_SWAP 3
-#define VMM_TYPE_RESERVED 4
+#define VMM_TYPE_RAM        0
+#define VMM_TYPE_RAM_BACKED 1
+#define VMM_TYPE_MMIO       2
+#define VMM_TYPE_FILE       3
+#define VMM_TYPE_RESERVED   4
 
 //Each process has its own address space. This includes having different address spaces between different cores. TODO: How to handle?
 struct VMM_Address_Space_t {

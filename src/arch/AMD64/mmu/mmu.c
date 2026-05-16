@@ -141,20 +141,57 @@ inline void *MMU_make_addr_half(void *addr, int half) {
 #define flag_n(x, flag, n) (int)((bool)(x & flag)) * n
 
 static inline void set_PTe(struct PageEntry_t *entry, u64 addr, u32 flags, u16 Available) {
-    entry->raw = addr | flag_n(flags, MMU_FLAG_NX, MMU_ENTRY_NX) | flag_n(flags, MMU_FLAG_GLOBAL, MMU_ENTRY_GLOBAL) | flag_n(flags, MMU_FLAG_PAT, MMU_ENTRY_PAT) | flag_n(flags, MMU_FLAG_PCD, MMU_ENTRY_PCD) | flag_n(flags, MMU_FLAG_PWT, MMU_FLAG_PWT) | flag_n(flags, MMU_FLAG_SUPERVISOR, MMU_FLAG_SUPERVISOR) | flag_n(flags, MMU_FLAG_RW, MMU_ENTRY_RW) | flag_n(flags, MMU_FLAG_PRESENT, MMU_ENTRY_PRESENT);
+    entry->raw = addr | flag_n(flags, MMU_FLAG_NX, MMU_ENTRY_NX) | flag_n(flags, MMU_FLAG_GLOBAL, MMU_ENTRY_GLOBAL) | flag_n(flags, MMU_FLAG_PAT, MMU_ENTRY_PAT) | flag_n(flags, MMU_FLAG_PCD, MMU_ENTRY_PCD) | flag_n(flags, MMU_FLAG_PWT, MMU_ENTRY_PWT) | flag_n(flags, MMU_FLAG_SUPERVISOR, MMU_ENTRY_SUPERVISOR) | flag_n(flags, MMU_FLAG_RW, MMU_ENTRY_RW) | flag_n(flags, MMU_FLAG_PRESENT, MMU_ENTRY_PRESENT);
     entry->raw |= (Available & ((1 << 4) - 1)) << 9 | (u64)((Available >> 3) & ((1 << 12) - 1)) << 52;
 }
 
 static inline void set_PDe(struct PageEntry_t *entry, u64 addr, u32 flags, u16 Available) {
-    entry->raw = addr | flag_n(flags, MMU_FLAG_NX, MMU_ENTRY_NX) | flag_n(flags, MMU_FLAG_PAT, MMU_ENTRY_PAT_BP) | flag_n(flags, MMU_FLAG_GLOBAL, MMU_ENTRY_GLOBAL) | MMU_ENTRY_PS | flag_n(flags, MMU_FLAG_PCD, MMU_ENTRY_PCD) | flag_n(flags, MMU_FLAG_PWT, MMU_FLAG_PWT) | flag_n(flags, MMU_FLAG_SUPERVISOR, MMU_FLAG_SUPERVISOR) | flag_n(flags, MMU_FLAG_RW, MMU_ENTRY_RW) | flag_n(flags, MMU_FLAG_PRESENT, MMU_ENTRY_PRESENT);
+    entry->raw = addr | flag_n(flags, MMU_FLAG_NX, MMU_ENTRY_NX) | flag_n(flags, MMU_FLAG_PAT, MMU_ENTRY_PAT_BP) | flag_n(flags, MMU_FLAG_GLOBAL, MMU_ENTRY_GLOBAL) | MMU_ENTRY_PS | flag_n(flags, MMU_FLAG_PCD, MMU_ENTRY_PCD) | flag_n(flags, MMU_FLAG_PWT, MMU_ENTRY_PWT) | flag_n(flags, MMU_FLAG_SUPERVISOR, MMU_ENTRY_SUPERVISOR) | flag_n(flags, MMU_FLAG_RW, MMU_ENTRY_RW) | flag_n(flags, MMU_FLAG_PRESENT, MMU_ENTRY_PRESENT);
     entry->raw |= (Available & ((1 << 4) - 1)) << 9 | (u64)((Available >> 3) & ((1 << 12) - 1)) << 52;
 }
 
 static inline void set_PDPTe(struct PageEntry_t *entry, u64 addr, u32 flags, u16 Available) {
-    entry->raw = addr | flag_n(flags, MMU_FLAG_NX, MMU_ENTRY_NX) | flag_n(flags, MMU_FLAG_PAT, MMU_ENTRY_PAT_BP) | flag_n(flags, MMU_FLAG_GLOBAL, MMU_ENTRY_GLOBAL) | MMU_ENTRY_PS | flag_n(flags, MMU_FLAG_PCD, MMU_ENTRY_PCD) | flag_n(flags, MMU_FLAG_PWT, MMU_FLAG_PWT) | flag_n(flags, MMU_FLAG_SUPERVISOR, MMU_FLAG_SUPERVISOR) | flag_n(flags, MMU_FLAG_RW, MMU_ENTRY_RW) | flag_n(flags, MMU_FLAG_PRESENT, MMU_ENTRY_PRESENT);
+    entry->raw = addr | flag_n(flags, MMU_FLAG_NX, MMU_ENTRY_NX) | flag_n(flags, MMU_FLAG_PAT, MMU_ENTRY_PAT_BP) | flag_n(flags, MMU_FLAG_GLOBAL, MMU_ENTRY_GLOBAL) | MMU_ENTRY_PS | flag_n(flags, MMU_FLAG_PCD, MMU_ENTRY_PCD) | flag_n(flags, MMU_FLAG_PWT, MMU_ENTRY_PWT) | flag_n(flags, MMU_FLAG_SUPERVISOR, MMU_ENTRY_SUPERVISOR) | flag_n(flags, MMU_FLAG_RW, MMU_ENTRY_RW) | flag_n(flags, MMU_FLAG_PRESENT, MMU_ENTRY_PRESENT);
     entry->raw |= (Available & ((1 << 4) - 1)) << 9 | (u64)((Available >> 3) & ((1 << 12) - 1)) << 52;
 }
 
+//Helpers to free a table when (re)mapping/freeing an address
+//TODO: Reducing the amount of invlpg's could be a good optimization. For now they stay for correctness.
+
+static inline void free_PT(u16 PML4_idx, u16 PDPT_idx, u16 PD_idx, struct PT_t* table) {
+    for(u16 idx = 0; idx < 512; idx++) {
+        if(!table->entries[idx].raw) continue;
+        X86_CPU_invlpg((void*)idx_to_vaddr(PML4_idx, PDPT_idx, PD_idx, idx));
+    }
+
+    PMM_free(table, MMU_PAGE_4K);
+}
+
+static inline void free_PD(u16 PML4_idx, u16 PDPT_idx, struct PD_t* table) {
+    for(u16 idx = 0; idx < 512; idx++) {
+        if(!table->entries[idx].raw) continue;
+        if(table->entries[idx].raw & MMU_ENTRY_PS) X86_CPU_invlpg((void*)idx_to_vaddr(PML4_idx, PDPT_idx, idx, 0));
+        else {
+            free_PT(PML4_idx, PDPT_idx, idx, page_to_paddr(table->entries[idx].raw));
+            table->entries[idx].raw = 0;
+        }
+    }
+
+    PMM_free(table, MMU_PAGE_4K);
+}
+
+static inline void free_PDPT(u16 PML4_idx,struct PDPT_t* table) {
+    for(u16 idx = 0; idx < 512; idx++) {
+        if(!table->entries[idx].raw) continue;
+        if(table->entries[idx].raw & MMU_ENTRY_PS) X86_CPU_invlpg((void*)idx_to_vaddr(PML4_idx, idx, 0, 0));
+        else {
+            free_PD(PML4_idx, idx, page_to_paddr(table->entries[idx].raw));
+            table->entries[idx].raw = 0;
+        }
+    }
+
+    PMM_free(table, MMU_PAGE_4K);
+}
 
 //
 // 
@@ -186,30 +223,32 @@ u8 MMU_map_page(void *address_space, void *paddr, void *vaddr, u32 page_size, u3
 
     struct PDPT_t* PDPT = page_to_paddr(PML4->PDPT[PML4_idx]);
     if (page_size == MMU_PAGE_1G) {
-        if(PDPT->entries[PDPT_idx].raw & MMU_ENTRY_PRESENT) X86_CPU_invlpg(vaddr);
+        free_PDPT(PML4_idx, PDPT);
         set_PDPTe(&PDPT->entries[PDPT_idx], (u64)paddr, flags, Available);
         return 0;
     }
 
-    if (!PDPT->entries[PDPT_idx].raw) {
+    if (!PDPT->entries[PDPT_idx].raw || PDPT->entries[PDPT_idx].raw & MMU_ENTRY_PS) {
+        if(PDPT->entries[PDPT_idx].raw & MMU_ENTRY_PS) X86_CPU_invlpg((void*)idx_to_vaddr(PML4_idx, PDPT_idx, 0, 0));
         PDPT->entries[PDPT_idx].raw = (u64)PMM_alloc_aligned(MMU_PAGE_4K, 0);
         PDPT->entries[PDPT_idx].raw |= MMU_ENTRY_PRESENT | MMU_ENTRY_SUPERVISOR | MMU_ENTRY_RW;
     }
 
     struct PD_t* PD = page_to_paddr(PDPT->PD[PDPT_idx]);
     if (page_size == MMU_PAGE_2M) {
-        if(PD->entries[PD_idx].raw & MMU_ENTRY_PRESENT) X86_CPU_invlpg(vaddr);
+        free_PD(PML4_idx, PDPT_idx, PD);
         set_PDe(&PD->entries[PD_idx], (u64)paddr, flags, Available);
         return 0;
     }
 
-    if (!PD->entries[PD_idx].raw) {
+    if (!PD->entries[PD_idx].raw || PD->entries[PD_idx].raw & MMU_ENTRY_PS) {
+        if(PD->entries[PD_idx].raw & MMU_ENTRY_PS) X86_CPU_invlpg((void*)idx_to_vaddr(PML4_idx, PDPT_idx, PD_idx, 0));
         PD->entries[PD_idx].raw = (u64)PMM_alloc_aligned(MMU_PAGE_4K, 0);
         PD->entries[PD_idx].raw |= MMU_ENTRY_PRESENT | MMU_ENTRY_SUPERVISOR | MMU_ENTRY_RW;
     }
 
     struct PT_t* PT = page_to_paddr(PD->PT[PD_idx]);
-    if(PT->entries[PT_idx].raw & MMU_ENTRY_PRESENT) X86_CPU_invlpg(vaddr);
+    free_PT(PML4_idx, PDPT_idx, PD_idx, PT);
     set_PTe(&PT->entries[PT_idx], (u64)paddr, flags, Available);
 
     return 0;
@@ -239,7 +278,8 @@ u8 MMU_map_range(void *address_space, void *paddr, void *vaddr, u64 size, u32 pa
 // 
 // 
 
-// Its not necessary to free the pages allocated, since that will be done once the process is terminated, keeping memory waste more or less low (CHECK & TODO)
+//TODO: PMM_free only gets called by helper function when a whole table is freed at once. What if a whole table is freed between different calls?
+
 u64 MMU_unmap_page(void *address_space, void *vaddr) {
     if(address_space == NULL) address_space = MMU_get_cr3();
 
