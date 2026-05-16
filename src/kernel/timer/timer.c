@@ -1,5 +1,6 @@
 #include <kernel/timer/timer.h>
 #include <kernel/timer/pit.h>
+#include <kernel/timer/lapic.h>
 #include <kernel/timer/tsc.h>
 
 struct timer_t {
@@ -21,9 +22,9 @@ static struct clock_sources_t clock_sources = {0, 0};
 
 struct timer_t timers[5] = {
     {TIMER_TYPE_PIT, false, false, false, &TIMER_PIT_init},
-    {TIMER_TYPE_TSC, false, false, false,  NULL},
-    {TIMER_TYPE_LAPIC, false, false, false, NULL},
-    {TIMER_TYPE_LAPIC_TSC, false, false, false, NULL},
+    {TIMER_TYPE_TSC, false, false, false,  &TIMER_TSC_init},
+    {TIMER_TYPE_APIC, false, false, false, &TIMER_APIC_init},
+    {TIMER_TYPE_APIC_TSC, false, false, false, NULL},
     {TIMER_TYPE_HPET, false, false, false, NULL},
 };
 
@@ -71,7 +72,7 @@ u64 TIMER_get_boot_timestamp(void) {
             return TIMER_PIT_get_timestamp();
         case TIMER_TYPE_TSC:
             return TIMER_TSC_get_timestamp();
-        case TIMER_TYPE_LAPIC:
+        case TIMER_TYPE_APIC:
             //Stub
             return 0;
         case TIMER_TYPE_HPET:
@@ -87,10 +88,10 @@ void TIMER_sleep(u32 time) {
         case TIMER_TYPE_PIT:
             //TIMER_PIT_sleep()
             break;
-        case TIMER_TYPE_LAPIC:
+        case TIMER_TYPE_APIC:
             //Stub
             break;
-        case TIMER_TYPE_LAPIC_TSC:
+        case TIMER_TYPE_APIC_TSC:
             //Stub
             break;
         case TIMER_TYPE_HPET:

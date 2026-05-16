@@ -5,8 +5,8 @@
 
 #define TIMER_TYPE_PIT          0
 #define TIMER_TYPE_TSC          1
-#define TIMER_TYPE_LAPIC        2
-#define TIMER_TYPE_LAPIC_TSC    3
+#define TIMER_TYPE_APIC        2
+#define TIMER_TYPE_APIC_TSC    3
 #define TIMER_TYPE_HPET         4
 
 void TIMER_init(void);

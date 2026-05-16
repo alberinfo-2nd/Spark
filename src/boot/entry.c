@@ -2,6 +2,7 @@
 #include <boot/entry.h>
 #include <boot/multiboot2.h>
 #include <arch/AMD64/cpu/cpu.h>
+#include <arch/AMD64/cpu/apic.h>
 #include <arch/AMD64/cpu/gdt.h>
 #include <arch/AMD64/interrupt/pic.h>
 #include <arch/AMD64/cpu/idt.h>
@@ -28,6 +29,8 @@ void kentry(void* multiboot_data) {
     X86_IDT_install();
 
     VMM_init();
+
+    X86_APIC_init();
 
     TIMER_init();
 
