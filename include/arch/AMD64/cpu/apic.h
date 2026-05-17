@@ -6,7 +6,9 @@
 struct X86_APIC_t {
     u32 ID;
     u64 baseAddress;
-    //Functions are restricted to X86_APIC_internal_t in lapic.c
+
+    //Some functions are restricted to X86_APIC_internal_t in apic.c
+    void (*send_eoi)(void);
 };
 
 bool X86_APIC_init(void);

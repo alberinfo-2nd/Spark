@@ -19,7 +19,12 @@ void ekalloc_expand(void) {
 void* ekalloc(u32 size) {
     if(finished_lock) return NULL;
 
-    if(size > PMM_map_size) return NULL; //NO! Use normal kalloc for this.
+    if(size > PMM_map_size) {
+        //Bypass the allocator and redirect the request straight to the PMM.
+        void* rptr = PMM_alloc_aligned(size, 0);
+        return MMU_make_addr_half(rptr, MMU_addr_kernel_half);
+    }
+
     if(remaining_space < size) ekalloc_expand(); //Very wasteful of memory
 
     void* rptr = ptr;

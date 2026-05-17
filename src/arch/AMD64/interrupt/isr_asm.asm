@@ -78,6 +78,9 @@ IRQ_13: IRQ 13 ; Entry 45 in the IDT
 IRQ_14: IRQ 14 ; Entry 46 in the IDT
 IRQ_15: IRQ 15 ; Entry 48 in the IDT
 
+[GLOBAL IRQ_Spurious]
+IRQ_Spurious: IRQ 255 ; Entry 255 in the IDT
+
 extern isr_handler
 isr_common:
     push rax

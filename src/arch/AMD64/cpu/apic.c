@@ -26,6 +26,7 @@
 #define APIC_LDR                0xD0
 #define APIC_DFR                0xE0
 #define APIC_SPURIOUS           0xF0
+    #define APIC_ASE            1 << 8
 //#define APIC_ISR [0x100-0x170]; In-service register
 //#define APIC_TMR [0x180-0x1F0]; Trigger mode register
 //#define APIC_IRR [0x200-0x270]; Interrupt request register
@@ -37,6 +38,12 @@
 #define APIC_PERF_VECTOR        0x340
 #define APIC_LINT0_VECTOR       0x350
 #define APIC_LINT1_VECTOR       0x360
+    #define APIC_VECTOR(x)      (x & 0xFF)
+    #define APIC_VECTOR_MT(x)   ((x >> 8) & ((1 << 3) - 1))
+    #define APIC_VECTOR_DS      1 << 12
+    #define APIC_VECTOR_RIR     1 << 14
+    #define APIC_VECTOR_TGM     1 << 15 //Trigger mode; 0 = Edge Triggered, 1 = Level triggered
+    #define APIC_VECTOR_MASK    1 << 16
 #define APIC_ERROR_VECTOR       0x370
 #define APIC_TIMER_INIT_COUNT   0x380
 #define APIC_TIMER_CURR_COUNT   0x390
@@ -96,23 +103,30 @@ u32 x2APIC_get_id(void) {
     return APIC_SELF->read_register(APIC_ID);
 }
 
+void APIC_send_eoi(void) {
+    APIC_SELF->write_register(APIC_EOI, 0);
+}
+
 bool X86_APIC_init() {
     u32 unused = 0, ecx = 0, edx = 0;
     X86_CPU_cpuid(1, &unused, &unused, &ecx, &edx);
     if(!(edx & CPUID_APIC_SUPPORTED)) return false; //APIC is not supported; not going to happen since we only boot on 64bit cpus anyways
 
+    X86_CPU_cli();
+
     struct X86_APIC_internal_t* apic = (struct X86_APIC_internal_t*)kalloc(sizeof(struct X86_APIC_internal_t));
     // apic->fields.baseAddress = (u64)VMM_alloc(NULL, 4096, VMM_TYPE_MMIO, MMU_FLAG_NX | MMU_FLAG_GLOBAL | MMU_FLAG_RW, MMU_PAGE_4K); //TODO: Make the address uncacheable
     apic->fields.baseAddress = 0xFEE00000;
     MMU_map_page(X86_CPU_get_self()->address_space->CR3, (void*)apic->fields.baseAddress, (void*)apic->fields.baseAddress, MMU_PAGE_4K, MMU_FLAG_NX | MMU_FLAG_GLOBAL | MMU_FLAG_RW | MMU_FLAG_PRESENT, 0);
-    apic->read_register  = &xAPIC_read_register;
-    apic->write_register = &xAPIC_write_register;
-    apic->get_id         = &xAPIC_get_id;
+    apic->fields.send_eoi   = &APIC_send_eoi;
+    apic->read_register     = &xAPIC_read_register;
+    apic->write_register    = &xAPIC_write_register;
+    apic->get_id            = &xAPIC_get_id;
 
     //Map address into address space and enable the lapic + other things
 
     X86_CPU_wrmsr(MSR_APIC_BASE_ADDR_REGISTER, MSR_APIC_BASE_ADDR(apic->fields.baseAddress) | MSR_APIC_ENABLE);
-    if(ecx & CPUID_x2APIC_SUPPORTED && apic->read_register(APIC_VERSION) & APIC_VERSION_x2APIC_PRESENT) {
+    if(ecx & CPUID_x2APIC_SUPPORTED) {
         apic->fields.baseAddress = 0;
         apic->read_register  = &x2APIC_read_register;
         apic->write_register = &x2APIC_write_register;
@@ -128,5 +142,11 @@ bool X86_APIC_init() {
     X86_CPU_get_self()->apic = (struct X86_APIC_t*)apic;
     apic->fields.ID = apic->get_id();
 
+    //TODO: Possibly set LINT0 and LINT1?
+
+    apic->write_register(APIC_SPURIOUS, APIC_ASE | 0xFF); //Set the spurious interrupt at entry 255
+
+    X86_CPU_sti();
+    
     return true;
 }

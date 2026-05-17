@@ -2,7 +2,7 @@
 #include <arch/AMD64/cpu/cpu.h>
 #include <kernel/mm/kalloc.h>
 
-#define IDT_ENTRIES 64 //256 maximum interrupt vectors
+#define IDT_ENTRIES 256 //256 maximum interrupt vectors
 
 #define DPL_KERNEL  0
 #define DPL_USER    0b11
@@ -63,6 +63,8 @@ extern void IRQ_12(void);
 extern void IRQ_13(void);
 extern void IRQ_14(void);
 extern void IRQ_15(void);
+
+extern void IRQ_Spurious(void);
 
 struct IDTR_t {
     u16 limit;
@@ -157,6 +159,8 @@ void X86_IDT_setup(struct IDT_t* IDT) {
     X86_IDT_setup_entry(&IDT->entries[45], &IRQ_13, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
     X86_IDT_setup_entry(&IDT->entries[46], &IRQ_14, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
     X86_IDT_setup_entry(&IDT->entries[47], &IRQ_15, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
+
+    X86_IDT_setup_entry(&IDT->entries[255], &IRQ_Spurious, 0, DESCRIPTOR_INTERRUPT, DPL_KERNEL);
 
     IDT->ptr.offset = (u64)&IDT->entries;
     IDT->ptr.limit = sizeof(IDT->entries)-1;

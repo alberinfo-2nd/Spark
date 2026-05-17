@@ -1,4 +1,5 @@
 #include <arch/AMD64/cpu/cpu.h>
+#include <arch/AMD64/interrupt/pic.h>
 #include <kernel/mm/kalloc.h>
 
 #define MSR_FSBase 0xC0000100
