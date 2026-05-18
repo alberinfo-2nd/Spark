@@ -3,11 +3,11 @@
 
 #include <types.h>
 
-#define TIMER_TYPE_PIT          0
-#define TIMER_TYPE_TSC          1
-#define TIMER_TYPE_APIC        2
-#define TIMER_TYPE_APIC_TSC    3
-#define TIMER_TYPE_HPET         4
+#define TIMER_TYPE_PIT      0
+#define TIMER_TYPE_APIC     1
+#define TIMER_TYPE_TSC      2
+#define TIMER_TYPE_APIC_TSC 3
+#define TIMER_TYPE_HPET     4
 
 void TIMER_init(void);
 void TIMER_disable(u8 timer_type); //Disables a specific timer. i.e, if LAPIC with TSC deadline is available, TSC is disabled (since it has to provide for the lapic)

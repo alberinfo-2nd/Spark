@@ -58,9 +58,21 @@ void X86_PIC_send_eoi(u8 IRQn) {
 }
 
 void X86_PIC_mask(u8 IRQn) {
+    u16 port = PIC_DATA_MASTER;
+    if(IRQn >= 8) {
+        port = PIC_DATA_SLAVE;
+        IRQn -= 8;
+    }
 
+    outportb(port, inportb(port) | (1 << IRQn));
 }
 
 void X86_PIC_unmask(u8 IRQn) {
+u16 port = PIC_DATA_MASTER;
+    if(IRQn >= 8) {
+        port = PIC_DATA_SLAVE;
+        IRQn -= 8;
+    }
 
+    outportb(port, inportb(port) & ~(1 << IRQn));
 }

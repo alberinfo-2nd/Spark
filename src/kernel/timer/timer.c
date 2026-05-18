@@ -11,6 +11,9 @@ struct timer_t {
 
     //Functions
     bool(*init)(void);
+    void(*irq_handler)(void);
+    u64 (*timestamp)(void);
+    void (*sleep)(u64);
 };
 
 struct clock_sources_t {
@@ -21,12 +24,15 @@ struct clock_sources_t {
 static struct clock_sources_t clock_sources = {0, 0};
 
 struct timer_t timers[5] = {
-    {TIMER_TYPE_PIT, false, false, false, &TIMER_PIT_init},
-    {TIMER_TYPE_TSC, false, false, false,  &TIMER_TSC_init},
-    {TIMER_TYPE_APIC, false, false, false, &TIMER_APIC_init},
-    {TIMER_TYPE_APIC_TSC, false, false, false, NULL},
-    {TIMER_TYPE_HPET, false, false, false, NULL},
+    {TIMER_TYPE_PIT, false, false, false, &TIMER_PIT_init, &TIMER_PIT_irq_handler, NULL, &TIMER_PIT_sleep},
+    {TIMER_TYPE_APIC, false, false, false, &TIMER_APIC_init, &TIMER_APIC_irq_handler, NULL, &TIMER_APIC_sleep},
+    {TIMER_TYPE_TSC, false, false, false,  NULL/*&TIMER_TSC_init*/, NULL, NULL, NULL},
+    {TIMER_TYPE_APIC_TSC, false, false, false, NULL, NULL, NULL, NULL},
+    {TIMER_TYPE_HPET, false, false, false, NULL, NULL, NULL, NULL},
 };
+
+//TODO: Make this an actually good sleep system that supports processes and multiple cores.
+static bool sleeping = false;
 
 void TIMER_init() {
     for(int i = 0; i < (int)(sizeof(timers)/sizeof(struct timer_t)); i++) {
@@ -49,53 +55,35 @@ void TIMER_prepare_rediscover(u8 timer_type) {
 
 void TIMER_set_timestamp_source(u8 timer_type) {
     if(timer_type > TIMER_TYPE_HPET) return;
+    if(timers[timer_type].timestamp == NULL) return;
     clock_sources.timestamp = timer_type;
 }
 
 void TIMER_set_sleep_source(u8 timer_type) {
     if(timer_type > TIMER_TYPE_HPET) return;
+    if(timers[timer_type].sleep == NULL) return;
     clock_sources.sleep = timer_type;
 }
 
 void TIMER_irq_handler(u8 IRQn) {
-    if(IRQn == 0) {
-        //If the pit is enabled it has not been disabled by the HPET or LAPIC. Thus, if the tsc is not enabled the PIT will take care of timekeeping.
-        if(clock_sources.timestamp == TIMER_TYPE_PIT) {
-            TIMER_PIT_timestamp_increment();
-        }
+    for(int i = TIMER_TYPE_PIT; i <= TIMER_TYPE_HPET; i++) {
+        if(!timers[i].active) continue;
+        if(timers[i].irq_handler == NULL) continue;
+        timers[i].irq_handler();
     }
 }
 
 u64 TIMER_get_boot_timestamp(void) {
-    switch (clock_sources.timestamp) {
-        case TIMER_TYPE_PIT:
-            return TIMER_PIT_get_timestamp();
-        case TIMER_TYPE_TSC:
-            return TIMER_TSC_get_timestamp();
-        case TIMER_TYPE_APIC:
-            //Stub
-            return 0;
-        case TIMER_TYPE_HPET:
-            //Stub
-            return 0;
-    }
-
-    return 0;
+    return timers[clock_sources.timestamp].timestamp();
 }
 
+//In milliseconds
 void TIMER_sleep(u32 time) {
-    switch (clock_sources.sleep) {
-        case TIMER_TYPE_PIT:
-            //TIMER_PIT_sleep()
-            break;
-        case TIMER_TYPE_APIC:
-            //Stub
-            break;
-        case TIMER_TYPE_APIC_TSC:
-            //Stub
-            break;
-        case TIMER_TYPE_HPET:
-            break;
-    }
+    timers[clock_sources.sleep].sleep((u64)time * 1e6);
+    return;
+}
+
+void TIMER_nano_sleep(u64 time) {
+    timers[clock_sources.sleep].sleep(time);
     return;
 }
