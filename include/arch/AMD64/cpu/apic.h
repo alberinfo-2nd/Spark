@@ -7,7 +7,9 @@ struct X86_APIC_t {
     u32 ID;
     u64 baseAddress;
 
-    //Some functions are restricted to X86_APIC_internal_t in apic.c
+    u32 (*read_register)(u16 offset);
+    void (*write_register)(u16 offset, u32 value);
+    u32 (*get_id)(void);
     void (*send_eoi)(void);
 };
 

@@ -60,23 +60,16 @@
 
 #define xAPIC_to_x2APIC(offset) (0x800 + offset / 0x10)
 
-#define APIC_SELF ((struct X86_APIC_internal_t*)X86_CPU_get_self()->apic)
-
-struct X86_APIC_internal_t {
-    struct X86_APIC_t fields;
-    u32 (*read_register)(u16 offset);
-    void (*write_register)(u16 offset, u32 value);
-    u32 (*get_id)(void);
-};
+#define APIC_SELF (X86_CPU_get_self()->apic)
 
 // xAPIC register manipulation //
 
 u32 xAPIC_read_register(u16 offset) {
-    return *(u32*)(APIC_SELF->fields.baseAddress + offset);
+    return *(u32*)(APIC_SELF->baseAddress + offset);
 }
 
 void xAPIC_write_register(u16 offset, u32 value) {
-    *(u32*)(APIC_SELF->fields.baseAddress + offset) = value;
+    *(u32*)(APIC_SELF->baseAddress + offset) = value;
     return;
 }
 
@@ -114,20 +107,20 @@ bool X86_APIC_init() {
 
     X86_CPU_cli();
 
-    struct X86_APIC_internal_t* apic = (struct X86_APIC_internal_t*)kalloc(sizeof(struct X86_APIC_internal_t));
+    struct X86_APIC_t* apic = (struct X86_APIC_t*)kalloc(sizeof(struct X86_APIC_t));
     // apic->fields.baseAddress = (u64)VMM_alloc(NULL, 4096, VMM_TYPE_MMIO, MMU_FLAG_NX | MMU_FLAG_GLOBAL | MMU_FLAG_RW, MMU_PAGE_4K); //TODO: Make the address uncacheable
-    apic->fields.baseAddress = 0xFEE00000;
-    MMU_map_page(X86_CPU_get_self()->address_space->CR3, (void*)apic->fields.baseAddress, (void*)apic->fields.baseAddress, MMU_PAGE_4K, MMU_FLAG_NX | MMU_FLAG_GLOBAL | MMU_FLAG_RW | MMU_FLAG_PRESENT, 0);
-    apic->fields.send_eoi   = &APIC_send_eoi;
+    apic->baseAddress = 0xFEE00000;
+    MMU_map_page(X86_CPU_get_self()->address_space->CR3, (void*)apic->baseAddress, (void*)apic->baseAddress, MMU_PAGE_4K, MMU_FLAG_NX | MMU_FLAG_GLOBAL | MMU_FLAG_RW | MMU_FLAG_PRESENT, 0);
+    apic->send_eoi   = &APIC_send_eoi;
     apic->read_register     = &xAPIC_read_register;
     apic->write_register    = &xAPIC_write_register;
     apic->get_id            = &xAPIC_get_id;
 
     //Map address into address space and enable the lapic + other things
 
-    X86_CPU_wrmsr(MSR_APIC_BASE_ADDR_REGISTER, MSR_APIC_BASE_ADDR(apic->fields.baseAddress) | MSR_APIC_ENABLE);
+    X86_CPU_wrmsr(MSR_APIC_BASE_ADDR_REGISTER, MSR_APIC_BASE_ADDR(apic->baseAddress) | MSR_APIC_ENABLE);
     if(ecx & CPUID_x2APIC_SUPPORTED) {
-        apic->fields.baseAddress = 0;
+        apic->baseAddress    = 0;
         apic->read_register  = &x2APIC_read_register;
         apic->write_register = &x2APIC_write_register;
         apic->get_id         = &x2APIC_get_id;
@@ -140,7 +133,7 @@ bool X86_APIC_init() {
 
     if((u64)APIC_SELF != (u64)apic) kfree(APIC_SELF);
     X86_CPU_get_self()->apic = (struct X86_APIC_t*)apic;
-    apic->fields.ID = apic->get_id();
+    apic->ID = apic->get_id();
 
     //TODO: Possibly set LINT0 and LINT1?
 
