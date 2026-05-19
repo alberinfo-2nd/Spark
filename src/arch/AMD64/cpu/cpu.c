@@ -24,6 +24,7 @@ extern void X86_CPU_create_self() {
     cpu_self->self = cpu_self;
     cpu_self->apic = kalloc(sizeof(struct X86_APIC_t)); //Address will be freed before reallocating in X86_APIC_init()
     cpu_self->apic->ID = X86_CPU_get_cpuid();
+    cpu_self->apic->send_eoi = &X86_PIC_send_eoi;
 
     X86_CPU_wrmsr(MSR_GSBase, (u64)cpu_self);
 }

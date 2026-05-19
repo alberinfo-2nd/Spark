@@ -24,8 +24,8 @@ static inline u8 DIVISOR(int x) {
 
 bool TIMER_APIC_init() {
     X86_CPU_get_self()->apic->write_register(APIC_TIMER_DIV_CONF, DIVISOR(4));
-    X86_CPU_get_self()->apic->write_register(APIC_TIMER_INIT_COUNT, 0xFFFFFFFF);
     X86_CPU_get_self()->apic->write_register(APIC_TIMER_VECTOR, 0);
+    X86_CPU_get_self()->apic->write_register(APIC_TIMER_INIT_COUNT, 0xFFFFFFFF);
 
     TIMER_sleep(250); //Sleep for 250ms
 
@@ -46,6 +46,7 @@ bool TIMER_APIC_init() {
 
 void TIMER_APIC_irq_handler() {
     sleeping = false;
+    X86_CPU_get_self()->apic->send_eoi(0);
 }
 
 void TIMER_APIC_sleep(u64 ns) {

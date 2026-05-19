@@ -10,8 +10,8 @@ void irq_handler(struct ISF_t* regs) {
             TIMER_irq_handler(regs->interrupt_number);
             break;
         case 255: //Spurious interrupt, send APIC eoi and continue.
-            X86_CPU_get_self()->apic->send_eoi();
-            break;
+            X86_CPU_get_self()->apic->send_eoi(0xFF);
+            return;
         default:
             break;
     }

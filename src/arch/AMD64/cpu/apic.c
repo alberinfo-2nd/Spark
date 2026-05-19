@@ -65,11 +65,11 @@
 // xAPIC register manipulation //
 
 u32 xAPIC_read_register(u16 offset) {
-    return *(u32*)(APIC_SELF->baseAddress + offset);
+    return *(volatile u32*)(APIC_SELF->baseAddress + offset);
 }
 
 void xAPIC_write_register(u16 offset, u32 value) {
-    *(u32*)(APIC_SELF->baseAddress + offset) = value;
+    *(volatile u32*)(APIC_SELF->baseAddress + offset) = value;
     return;
 }
 
@@ -96,7 +96,8 @@ u32 x2APIC_get_id(void) {
     return APIC_SELF->read_register(APIC_ID);
 }
 
-void APIC_send_eoi(void) {
+//IRQn is unused
+void APIC_send_eoi(u8 IRQn) {
     APIC_SELF->write_register(APIC_EOI, 0);
 }
 
@@ -108,10 +109,9 @@ bool X86_APIC_init() {
     X86_CPU_cli();
 
     struct X86_APIC_t* apic = (struct X86_APIC_t*)kalloc(sizeof(struct X86_APIC_t));
-    // apic->fields.baseAddress = (u64)VMM_alloc(NULL, 4096, VMM_TYPE_MMIO, MMU_FLAG_NX | MMU_FLAG_GLOBAL | MMU_FLAG_RW, MMU_PAGE_4K); //TODO: Make the address uncacheable
-    apic->baseAddress = 0xFEE00000;
+    apic->baseAddress = 0xFEE00000; //Address should have been set as UC through MTRRs by the bios.
     MMU_map_page(X86_CPU_get_self()->address_space->CR3, (void*)apic->baseAddress, (void*)apic->baseAddress, MMU_PAGE_4K, MMU_FLAG_NX | MMU_FLAG_GLOBAL | MMU_FLAG_RW | MMU_FLAG_PRESENT, 0);
-    apic->send_eoi   = &APIC_send_eoi;
+    apic->send_eoi          = &APIC_send_eoi;
     apic->read_register     = &xAPIC_read_register;
     apic->write_register    = &xAPIC_write_register;
     apic->get_id            = &xAPIC_get_id;
