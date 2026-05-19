@@ -13,7 +13,7 @@ struct X86_CPU_self_t {
     struct X86_CPU_self_t* self;
     struct VMM_Address_Space_t* address_space;
     struct X86_APIC_t* apic;
-    // + possibly more data, such as IOAPIC, LAPIC, a pointer to the numa domain, tsc / timer info, etc
+    // + possibly more data, such as IOAPIC, a pointer to the numa domain, tsc / timer info, etc
 };
 
 static inline void X86_CPU_cli(void) {
@@ -49,7 +49,7 @@ static inline u64 X86_CPU_rdmsr(u32 msr) {
 }
 
 static inline void X86_CPU_wrmsr(u32 msr, u64 value) {
-    asm volatile("mov %%eax, %0\nmov %%edx, %1\nmov %%ecx, %2\nwrmsr" : : "a" ((u32)value), "d" ((u32)(value >> 32)), "c" (msr));
+    asm volatile("wrmsr" : : "a" ((u32)value), "d" ((u32)(value >> 32)), "c" (msr));
 }
 
 static inline void X86_CPU_invlpg(void* ptr) {
@@ -61,6 +61,12 @@ static inline bool X86_CPU_self_initialized(void) {
     u32 ss = 0, gs = 0;
     asm volatile("mov %%ss, %0\nmov %%gs, %1" : "=r" (ss), "=r" (gs));
     return ss != gs;
+}
+
+static inline u64 X86_CPU_rdtsc(void) {
+    u32 eax = 0, edx = 0;
+    asm volatile("rdtsc\nmov %%eax, %0\nmov %%edx, %1" : "=r" (eax), "=r" (edx) : : "eax", "edx");
+    return ((u64)edx << 32) | eax;
 }
 
 extern void X86_CPU_set_cr4_bit(u8 bit);

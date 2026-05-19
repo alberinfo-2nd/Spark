@@ -13,7 +13,7 @@ CFLAGS+=-Wfloat-equal -Wundef -Wcast-align -Wwrite-strings -Wlogical-op -Wredund
 CFLAGS+=-Wshadow -Wno-unused-parameter -Wstrict-prototypes -Wno-unused-variable -Werror
 CFLAGS+=-I $(INC_DIR)
 LDFLAGS=-N --script=src/linker.ld
-QEMUFLAGS=-serial file:serialOut.log -net none -boot d -smp 1 -m 32M --cdrom os.iso
+QEMUFLAGS=-serial file:serialOut.log -cpu Nehalem-v1,+invtsc,+x2apic -net none -boot d -smp 1 -m 32M --cdrom os.iso
 
 ifeq ($(DEBUG),true)
   NASMFLAGS+= -g -F dwarf
@@ -45,7 +45,7 @@ run-qemu-bios:
 	qemu-system-x86_64 $(QEMUFLAGS)
 
 run-qemu-uefi:
-	qemu-system-x86_64 $(QEMUFLAGS) -enable-kvm -cpu host,+invtsc --bios UEFI/OVMF.fd
+	qemu-system-x86_64 $(QEMUFLAGS) -enable-kvm --bios UEFI/OVMF.fd
 
 run-bochs:
 #add -dbg when ussing bochs debugger

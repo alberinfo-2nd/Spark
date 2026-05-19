@@ -48,12 +48,12 @@
 #define APIC_TIMER_INIT_COUNT   0x380
 #define APIC_TIMER_CURR_COUNT   0x390
 #define APIC_TIMER_DIV_CONF     0x3E0
-#define x2APIC_FEATURES         0x400
+#define APIC_FEATURES           0x400
     #define x2APIC_FEATURES_EXTENDED_LVT_COUNT(x)   ((x >> 16) & ((1 << 8) - 1))
     #define x2APIC_FEATURES_EXTENDED_ID             1 << 2
     #define x2APIC_FEATURES_SPECIFIC_EOI            1 << 1
     #define x2APIC_FEATURES_INT_ENABLE_REGISTER     1 << 0
-#define x2APIC_CONTROL          0x410
+#define APIC_CONTROL            0x410
 #define APIC_SEOI               0x420
 //#define APIC_IER [0x480-0x4F0]; Interrupt Enable Registers
 //#define APIC_LVT [0x500-0x530]; Extended interrupt [3:0] LVT Registers
@@ -82,7 +82,7 @@ u32 x2APIC_read_register(u16 offset) {
 }
 
 void x2APIC_write_register(u16 offset, u32 value) {
-    X86_CPU_wrmsr(offset, xAPIC_to_x2APIC(offset));
+    X86_CPU_wrmsr(xAPIC_to_x2APIC(offset), value);
     return;
 }
 
@@ -119,16 +119,17 @@ bool X86_APIC_init() {
     //Map address into address space and enable the lapic + other things
 
     X86_CPU_wrmsr(MSR_APIC_BASE_ADDR_REGISTER, MSR_APIC_BASE_ADDR(apic->baseAddress) | MSR_APIC_ENABLE);
-    if(ecx & CPUID_x2APIC_SUPPORTED) {
+
+    if(apic->read_register(APIC_FEATURES) & x2APIC_FEATURES_EXTENDED_ID) apic->write_register(APIC_CONTROL, x2APIC_FEATURES_EXTENDED_ID);
+    //if(apic->read_register(APIC_FEATURES) & x2APIC_FEATURES_SPECIFIC_EOI) lapic->write_register(APIC_CONTROL, x2APIC_FEATURES_SPECIFIC_EOI);
+
+    if(ecx & CPUID_x2APIC_SUPPORTED && ecx & apic->read_register(APIC_VERSION) & APIC_VERSION_x2APIC_PRESENT) {
         apic->baseAddress    = 0;
         apic->read_register  = &x2APIC_read_register;
         apic->write_register = &x2APIC_write_register;
         apic->get_id         = &x2APIC_get_id;
 
         X86_CPU_wrmsr(MSR_APIC_BASE_ADDR_REGISTER, MSR_X2APIC_ENABLE | MSR_APIC_ENABLE); //Since x2APIC is available, enable it by writing x2APIC_enable and APIC_enable at the same time
-        if(apic->read_register(x2APIC_FEATURES) & x2APIC_FEATURES_EXTENDED_ID) apic->write_register(x2APIC_CONTROL, x2APIC_FEATURES_EXTENDED_ID);
-        //if(lapic->read_register(x2APIC_FEATURES) & x2APIC_FEATURES_SPECIFIC_EOI) lapic->write_register(x2APIC_CONTROL, x2APIC_FEATURES_SPECIFIC_EOI);
-        if(apic->read_register(x2APIC_FEATURES) & x2APIC_FEATURES_EXTENDED_ID) apic->write_register(x2APIC_CONTROL, x2APIC_FEATURES_EXTENDED_ID);
     }
 
     if((u64)APIC_SELF != (u64)apic) kfree(APIC_SELF);
