@@ -1,4 +1,6 @@
 #include <arch/AMD64/cpu/gdt.h>
+#include <arch/AMD64/cpu/cpu.h>
+#include <kernel/mm/kalloc.h>
 
 #define GDT_SEGMENT_ACCESSED 1 << 0
 #define GDT_SEGMENT_RW 1 << 1
@@ -29,7 +31,7 @@ struct GDT_Segment_t {
     u8 ignored_3; //56-63 base. Ignored in long mode.
 } __attribute__((packed));
 
-struct GDT_t{
+struct GDT_t {
     // 0x0: Null Descriptor
     // 0x8: Kernel Code Descriptor
     // 0x10: Kernel Data Descriptor
@@ -42,25 +44,7 @@ struct GDT_t{
     //TODO: TSS
 } __attribute__((packed)) __attribute__((aligned(0x20))); //Align to Doubleword (32-bits)
 
-//TODO: Implement locking mechanism so as to not have multiple cores overlapping the new GDT entries
-struct GDT_Table_t {
-    struct GDT_t GDT;
-    struct GDT_Table_t *next;
-    u32 cpuId; //LapicId
-};
-
-struct GDT_Table_t *X86_GDT_setup(void);
-
-static struct GDT_Table_t GDT_Table = (struct GDT_Table_t){ 0 };
-
-struct GDT_Table_t *X86_GDT_setup() {
-    struct GDT_Table_t *Current_table = &GDT_Table;
-    while(Current_table->next != 0) {
-        Current_table = Current_table->next;
-    }
-
-    struct GDT_t *GDT = &Current_table->GDT;
-
+void X86_GDT_setup(struct GDT_t* GDT) {
     GDT->entries[0] = (struct GDT_Segment_t){ 0 }; //Null descriptor
     GDT->entries[1] = (struct GDT_Segment_t){ .access = GDT_SEGMENT_EXECUTABLE | GDT_SEGMENT_TYPE | GDT_DPL_KERNEL | GDT_SEGMENT_PRESENT, .flags = GDT_SEGMENT_LMODE_FLAG, .limit = 0xFFFF }; //Kernel code descriptor
     GDT->entries[2] = (struct GDT_Segment_t){ .access = GDT_SEGMENT_RW | GDT_SEGMENT_TYPE | GDT_DPL_KERNEL | GDT_SEGMENT_PRESENT, .limit = 0xFFFF }; //Kernel data descriptor
@@ -68,20 +52,22 @@ struct GDT_Table_t *X86_GDT_setup() {
     GDT->entries[4] = (struct GDT_Segment_t){ .access = GDT_SEGMENT_RW | GDT_SEGMENT_TYPE | GDT_DPL_USER | GDT_SEGMENT_PRESENT, .limit = 0xFFFF }; //User data descriptor
     //TSS
 
-    GDT->ptr.offset = (u64)&GDT->entries;
+    GDT->ptr.offset = (u64)GDT->entries;
     GDT->ptr.limit = sizeof(GDT->entries)-1;
 
-    return Current_table;
+    return;
 }
 
-void X86_GDT_install(bool is_bootcore, u32 cpuId) {
-    if(!is_bootcore) {} //TODO: Allocate new GDT Entry
-    
-    struct GDT_Table_t *Current_GDT_Table = X86_GDT_setup();
+void X86_GDT_install(void) {
+    struct GDT_t* GDT = kalloc(sizeof(struct GDT_t));
+    X86_GDT_setup(GDT);
 
-    Current_GDT_Table->cpuId = cpuId;
-
-    asm volatile("lgdt (%0)" : : "r" ((u64)&Current_GDT_Table->GDT.ptr));
-
+    asm volatile("lgdt (%0)" : : "r" (&GDT->ptr));
     return;
+}
+
+struct GDTR_t X86_GDT_get_ptr(void) {
+    struct GDTR_t GDT = {};
+    asm volatile("sgdt %0" : : "m" (GDT) : "memory");
+    return GDT;
 }

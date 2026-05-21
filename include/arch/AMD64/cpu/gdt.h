@@ -6,8 +6,7 @@
 struct GDTR_t;
 struct GDT_Segment_t;
 struct GDT_t;
-struct GDT_Table_t;
 
-extern void X86_GDT_install(bool is_bootcore, u32 cpuId);
+extern void X86_GDT_install(void);
 
 #endif

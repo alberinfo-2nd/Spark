@@ -14,15 +14,16 @@ void X86_CPU_set_cr4_bit(u8 bit) {
 }
 
 extern struct X86_CPU_self_t* X86_CPU_get_self(void) {
-    void* ptr = 0;
-    asm volatile("mov %%gs:0, %0" : : "*a" (ptr));
+    struct X86_CPU_self_t* ptr = 0;
+    asm volatile("mov %%gs:0, %0" : "=r" (ptr));
+    return ptr;
 }
 
 extern void X86_CPU_create_self() {
-    struct X86_CPU_self_t* cpu_self = (struct X86_CPU_self_t*)MMU_make_addr_half(kalloc(sizeof(struct X86_CPU_self_t)), MMU_addr_higher_half);
+    struct X86_CPU_self_t* cpu_self = (struct X86_CPU_self_t*)kalloc(sizeof(struct X86_CPU_self_t));
+    cpu_self->self = cpu_self;
     cpu_self->cpuID = X86_CPU_get_cpuid();
     //set GDT and IDT
 
-    X86_CPU_wrmsr(MSR_kernelGSBase, (u64)cpu_self);
-    asm volatile("swapgs"); //swap kernelGSBase into GS.Base
+    X86_CPU_wrmsr(MSR_GSBase, (u64)cpu_self);
 }

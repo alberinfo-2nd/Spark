@@ -1,4 +1,8 @@
 #include <arch/AMD64/cpu/idt.h>
+#include <arch/AMD64/cpu/cpu.h>
+#include <kernel/mm/kalloc.h>
+
+#define IDT_ENTRIES 64 //256 maximum interrupt vectors
 
 #define DPL_KERNEL  0
 #define DPL_USER    0b11
@@ -80,21 +84,13 @@ struct IDT_Gate_t {
 } __attribute__((packed));
 
 struct IDT_t {
-    struct IDT_Gate_t entries[256];
+    struct IDT_Gate_t entries[IDT_ENTRIES];
     struct IDTR_t ptr;
 } __attribute__((packed)) __attribute__((aligned(0x20))); //Align to Doubleword (32-bits)
 
-struct IDT_Table_t {
-    struct IDT_t IDT;
-    struct IDT_Table_t *next;
-    u32 cpuId;
-};
-
 void X86_IDT_setup_entry(struct IDT_Gate_t* entry, void* call_addr, u8 IST, u8 gate_type, u8 DPL);
-struct IDT_Table_t *X86_IDT_setup(void);
+void X86_IDT_setup(struct IDT_t* IDT);
 void isr_handler(struct ISF_t* regs);
-
-static struct IDT_Table_t IDT_Table = (struct IDT_Table_t){ 0 };
 
 void X86_IDT_setup_entry(struct IDT_Gate_t* entry, void* call_addr, u8 IST, u8 gate_type, u8 DPL) {
     entry->offset_low = (u16)((u64)call_addr & 0xFFFF); //Low 16 bits
@@ -119,14 +115,7 @@ void X86_IDT_setup_entry(struct IDT_Gate_t* entry, void* call_addr, u8 IST, u8 g
     entry->reserved_2 = 0;
 }
 
-struct IDT_Table_t *X86_IDT_setup() {
-    struct IDT_Table_t *Current_table = &IDT_Table;
-    while(Current_table->next != 0) {
-        Current_table = Current_table->next;
-    }
-
-    struct IDT_t *IDT = &Current_table->IDT;
-
+void X86_IDT_setup(struct IDT_t* IDT) {
     // Setup IDT Entries for ISRs and IRQs
     X86_IDT_setup_entry(&IDT->entries[0], &ISR_0, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
     X86_IDT_setup_entry(&IDT->entries[1], &ISR_1, 0, DESCRIPTOR_TRAP_GATE, DPL_KERNEL);
@@ -172,17 +161,19 @@ struct IDT_Table_t *X86_IDT_setup() {
     IDT->ptr.offset = (u64)&IDT->entries;
     IDT->ptr.limit = sizeof(IDT->entries)-1;
 
-    return Current_table;
+    return;
 }
 
-void X86_IDT_install(bool is_bootcore, u32 cpuId) {
-    if(!is_bootcore) {} //TODO: Allocate new IDT entry
+void X86_IDT_install() {
+    struct IDT_t* IDT = kalloc(sizeof(struct IDT_t));
+    X86_IDT_setup(IDT);
 
-    struct IDT_Table_t *Current_IDT_Table = X86_IDT_setup();
-
-    Current_IDT_Table->cpuId = cpuId;
-
-    asm volatile("lidt (%0)" : : "r" ((u64)&Current_IDT_Table->IDT.ptr));
-
+    asm volatile("lidt (%0)" : : "r" (&IDT->ptr));
     return;
+}
+
+struct IDTR_t X86_IDT_get_ptr(void) {
+    struct IDTR_t IDT = {};
+    asm volatile("sidt %0" : : "m" (IDT) : "memory");
+    return IDT;
 }
