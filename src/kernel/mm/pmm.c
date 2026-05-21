@@ -107,14 +107,20 @@ void PMM_add_block(void* addr, u64 size) {
 //  For page_alignment_interval = 6, mask_shift = 4, masks: 10000010 00001000 00100000 10000010
 
 static inline u64 shift_mask(u64 mask, u32 mask_shift, u32 page_alignment_interval) {
-    u64 first_mask = 0;
-    asm volatile("bsr %1, %0" : "=r" (first_mask) : "r" (mask) : "rax", "rbx", "flags"); //Search for the first set bit in the mask
-    
-    first_mask -= mask_shift; //Calculate the position of the first bit in the mask with respect to the mask after its shifted
-    return (mask >> mask_shift) | (1ULL << (first_mask + page_alignment_interval)); //Shift the mask and set the (possibly) new MSB in the mask
+    //We have to shift by however many bitmap entries we skipped
+    for(u32 i = 0; i <= page_alignment_interval / 64; i++) {
+        u64 first_mask = 0;
+        asm volatile("bsr %1, %0" : "=r" (first_mask) : "r" (mask) : "rax", "rbx", "flags"); //Search for the first set bit in the mask
+        
+        first_mask -= mask_shift; //Calculate the position of the first bit in the mask with respect to the mask after its shifted
+
+        if(first_mask + page_alignment_interval >= 64) mask >>= mask_shift;
+        else mask = (mask >> mask_shift) | (1ULL << (first_mask + page_alignment_interval)); //Shift the mask and set the (possibly) new MSB in the mask
+    }
+    return mask;
 }
 
-//TODO: HANDLE ALIGNMENT, and possibly more things such as placement (for things like DMA, MMIOs and the like)
+//TODO: Possibly handle more things such as placement (for things like DMA, MMIOs and the like)
 void* PMM_alloc_aligned(u64 size, u64 alignment) {
     if(alignment == 0) alignment = PMM_map_size;
 
@@ -134,13 +140,16 @@ void* PMM_alloc_aligned(u64 size, u64 alignment) {
         u64 alignment_mask = 0; //Mark where map addresses that would satisfy the requested alignment are
         if(page_alignment_interval == 1) alignment_mask = ~0ULL;
         else {
-            for(int i = 64 - alignment_mask - 1; i >= 0; i -= page_alignment_interval) {
-                alignment_mask |= (1 << (i+page_alignment_interval-1));
+            for(int i = 64 - alignment_shift % 64 - 1; i >= 0; i -= page_alignment_interval) {
+                alignment_mask |= 1ULL << i;
             }
         }
 
+        //For some reason doing the pointer arithmetic in the initialization of the loops below sets bmp to zero instead of its correct value....? Recheck
+        u64* bmp = block->bitmap + alignment_shift/64;
+
         if(page_count == 1) {
-            for(u64 *bmp = block->bitmap; (u64)bmp <= (u64)block->bitmap + block->bitmap_size; bmp++, alignment_mask = shift_mask(alignment_mask, mask_shift, page_alignment_interval)) {                
+            for(; (u64)bmp <= (u64)block->bitmap + block->bitmap_size; bmp+=align(page_alignment_interval, 64)/64, alignment_mask = shift_mask(alignment_mask, mask_shift, page_alignment_interval)) {                
                 u64 map = ~(*bmp) & alignment_mask;
                 if(map == 0) continue;
 
@@ -150,32 +159,37 @@ void* PMM_alloc_aligned(u64 size, u64 alignment) {
 
                 void* addr = (void*)((u64)block->addr + (((u64)bmp - (u64)block->bitmap) * 8 + (64-map_idx-1)) * PMM_map_size);
                 if ((u64)addr+size >= (u64)block->addr + block->size) break; //If the end of the allocation goes over the end of the block, then ignore it and try again.
-                *bmp |= (u64)1 << map_idx;
+                *bmp |= 1ULL << map_idx;
 
                 return addr;
             }
         } else {
-            for(u64 *bmp = block->bitmap; (u64)bmp <= (u64)block->bitmap + block->bitmap_size; bmp++, alignment_mask = shift_mask(alignment_mask, mask_shift, page_alignment_interval)) {
-                u64 map = ~(*bmp) & alignment_mask;
-                if(map == 0) continue;        
+            for(; (u64)bmp <= (u64)block->bitmap + block->bitmap_size; bmp+=align(page_alignment_interval, 64)/64, alignment_mask = shift_mask(alignment_mask, mask_shift, page_alignment_interval)) {
+                u64 map = ~(*bmp);
+                if((map & alignment_mask) == 0) continue;        
 
                 u64 mask = 0;
-                u8 tmp_page_count = page_count;
+                u32 tmp_page_count = page_count;
                 u8 bmp_idx = 0;
                 u8 starting_map_idx = 63;
 
+                u64 alignment_mask_copy = alignment_mask;
+
                 do {
+                    if((map & alignment_mask_copy) == 0) break; //bsr on an empty register is undefined.
+
                     u64 shift_idx = 0;
-                    asm volatile("bsr %1, %0" : "=r" (shift_idx) : "r" (map) : "rax", "rbx", "flags");
+                    asm volatile("bsr %1, %0" : "=r" (shift_idx) : "r" (map & alignment_mask_copy) : "cc");
 
                     if(bmp_idx && shift_idx != 63) break; //We can only continue allocations from the MSB
 
                     if(shift_idx+1 >= tmp_page_count) {
-                            mask = ((u64)1 << tmp_page_count) - 1;
-                            mask <<= shift_idx+1-tmp_page_count;
+                        if(tmp_page_count < 64) mask = (1ULL << tmp_page_count) - 1;
+                        else mask = ~0ULL;
+                        mask <<= shift_idx+1-tmp_page_count;
                     } else {
-                        if(!bmp_idx) mask = ((u64)1 << (shift_idx+1))-1;
-                        else mask = ~(u64)0;
+                        if(!bmp_idx) mask = (1ULL << (shift_idx+1))-1;
+                        else mask = ~0ULL;
                     }
 
                     if((map & mask) == mask) {
@@ -186,10 +200,10 @@ void* PMM_alloc_aligned(u64 size, u64 alignment) {
                             bmp_idx++;
                             map = ~(*(bmp+bmp_idx));
                         }
+
+                        alignment_mask_copy = ~0ULL;
                     } else {
-                        //TODO: TEST WHEN BITMAP IS FRAGMENTED
-                        //Skip MSB entries we just went over
-                        map = (map ^ mask) & map;
+                        map &= ~mask; //Skip MSB entries that do not align with the mask.
                     }
                 } while(tmp_page_count && map);
 
@@ -199,14 +213,14 @@ void* PMM_alloc_aligned(u64 size, u64 alignment) {
                 if ((u64)addr+size >= (u64)block->addr + block->size) break;
 
                 if(page_count <= starting_map_idx) {
-                    *bmp |= (((u64)1 << page_count)-1) << (starting_map_idx-page_count);
+                    *bmp |= ((1ULL << page_count)-1) << (starting_map_idx-page_count);
                     return addr;
                 }
 
-                *bmp |= ((u64)1 << (starting_map_idx)) - 1;
+                *bmp |= (1ULL << (starting_map_idx+1)) - 1;
                 page_count -= starting_map_idx;
                 for(u64* bmp2 = bmp+1; bmp2 <= bmp+bmp_idx; bmp2++, page_count -= 64) {
-                    u64 newbitmap = page_count >= 64 ? ~(u64)0 : (((u64)1 << page_count)-1) << (64-page_count);
+                    u64 newbitmap = page_count >= 64 ? ~0ULL : ((1ULL << page_count)-1) << (64-page_count);
                     *bmp2 |= newbitmap;
                 }
 
@@ -218,7 +232,7 @@ void* PMM_alloc_aligned(u64 size, u64 alignment) {
     return NULL;
 }
 
-//TODO: HANDLE FREEING
+//TODO: Test
 void PMM_free(void *addr, u64 size) {
     size = align(size, PMM_map_size);
 
@@ -240,11 +254,11 @@ void PMM_free(void *addr, u64 size) {
                 mask = ~mask;
                 unmapped_pages = 64;
             } else {
-                mask = ((u64)1 << starting_map_idx) - 1;
+                mask = (1ULL << starting_map_idx) - 1;
                 unmapped_pages = starting_map_idx;
             }
         } else {
-            mask = (((u64)1 << page_count)-1) << (starting_map_idx-page_count);
+            mask = ((1ULL << page_count)-1) << (starting_map_idx-page_count);
             unmapped_pages = page_count;
         }
 
@@ -255,10 +269,10 @@ void PMM_free(void *addr, u64 size) {
             bmp_idx++;
             page_count -= unmapped_pages;
             if(page_count >= 64) {
-                mask = ~(u64)0;
+                mask = ~0ULL;
                 unmapped_pages = 64;
             } else {
-                mask = (((u64)1 << page_count)-1) << (64-page_count);
+                mask = ((1ULL << page_count)-1) << (64-page_count);
                 unmapped_pages = page_count;
             }
         } while (page_count);
