@@ -99,21 +99,53 @@ void PMM_add_block(void* addr, u64 size) {
     block->next = NULL;
 }
 
+// Helper function that rotates the mask which contains a pattern that repeats every page_alignment_interval bits.
+// Examples (in 8 bits, as its easier to visualize that way):
+//  For page_alignment_interval = 2, mask_shift = 0, masks: 10101010 10101010 [...]
+//  For page_alignment_interval = 3, mask_shift = 1, masks: 10010010 01001001 00100100 10010010
+//  For page_alignment_interval = 5, mask_shift = 2, masks: 10000100 00100001 00000100 01000010
+//  For page_alignment_interval = 6, mask_shift = 4, masks: 10000010 00001000 00100000 10000010
+
+static inline u64 shift_mask(u64 mask, u32 mask_shift, u32 page_alignment_interval) {
+    u64 first_mask = 0;
+    asm volatile("bsr %1, %0" : "=r" (first_mask) : "r" (mask) : "rax", "rbx", "flags"); //Search for the first set bit in the mask
+    
+    first_mask -= mask_shift; //Calculate the position of the first bit in the mask with respect to the mask after its shifted
+    return (mask >> mask_shift) | (1ULL << (first_mask + page_alignment_interval)); //Shift the mask and set the (possibly) new MSB in the mask
+}
+
 //TODO: HANDLE ALIGNMENT, and possibly more things such as placement (for things like DMA, MMIOs and the like)
 void* PMM_alloc_aligned(u64 size, u64 alignment) {
+    if(alignment == 0) alignment = PMM_map_size;
+
     size = align(size, PMM_map_size);
+    alignment = align(alignment, PMM_map_size);
 
     struct PMM_memory_block_list_t *block_list = get_block_list();
     
     u32 page_count = size / PMM_map_size; //Number of PMM_map_size'd pages to allocate
+    u32 page_alignment_interval = alignment / PMM_map_size; //Every how many pages the alignment happens
+    u32 mask_shift = (page_alignment_interval - (64 % page_alignment_interval)) % page_alignment_interval; //How many bits the mask shifts for every bitmap entry traveled
 
     for(struct PMM_memory_block_t *block = block_list->addr; block; block = block->next) {
+        u64 first_aligned_address = align((u64)block->addr, alignment); //First address that is aligned to the requested amount
+        u32 alignment_shift = (first_aligned_address - (u64)block->addr) / PMM_map_size; // How many maps we need to skip in order to get the first aligned address
+
+        u64 alignment_mask = 0; //Mark where map addresses that would satisfy the requested alignment are
+        if(page_alignment_interval == 1) alignment_mask = ~0ULL;
+        else {
+            for(int i = 64 - alignment_mask - 1; i >= 0; i -= page_alignment_interval) {
+                alignment_mask |= (1 << (i+page_alignment_interval-1));
+            }
+        }
+
         if(page_count == 1) {
-            for(u64 *bmp = block->bitmap; (u64)bmp <= (u64)block->bitmap + block->bitmap_size; bmp++) {
-                u64 map = ~(*bmp);
+            for(u64 *bmp = block->bitmap; (u64)bmp <= (u64)block->bitmap + block->bitmap_size; bmp++, alignment_mask = shift_mask(alignment_mask, mask_shift, page_alignment_interval)) {                
+                u64 map = ~(*bmp) & alignment_mask;
                 if(map == 0) continue;
 
                 u64 map_idx = 0;
+
                 asm volatile("bsr %1, %0" : "=r" (map_idx) : "r" (map) : "rax", "rbx", "flags");
 
                 void* addr = (void*)((u64)block->addr + (((u64)bmp - (u64)block->bitmap) * 8 + (64-map_idx-1)) * PMM_map_size);
@@ -123,8 +155,8 @@ void* PMM_alloc_aligned(u64 size, u64 alignment) {
                 return addr;
             }
         } else {
-            for(u64 *bmp = block->bitmap; (u64)bmp <= (u64)block->bitmap + block->bitmap_size; bmp++) {
-                u64 map = ~(*bmp);
+            for(u64 *bmp = block->bitmap; (u64)bmp <= (u64)block->bitmap + block->bitmap_size; bmp++, alignment_mask = shift_mask(alignment_mask, mask_shift, page_alignment_interval)) {
+                u64 map = ~(*bmp) & alignment_mask;
                 if(map == 0) continue;        
 
                 u64 mask = 0;
