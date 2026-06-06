@@ -1,6 +1,7 @@
 #include <arch/AMD64/cpu/idt.h>
 #include <arch/AMD64/cpu/cpu.h>
 #include <kernel/mm/kalloc.h>
+#include <string.h>
 
 #define IDT_ENTRIES 256 //256 maximum interrupt vectors
 
@@ -170,6 +171,7 @@ void X86_IDT_setup(struct IDT_t* IDT) {
 
 void X86_IDT_install() {
     struct IDT_t* IDT = kalloc(sizeof(struct IDT_t));
+    memset(IDT, 0, sizeof(struct IDT_t));
     X86_IDT_setup(IDT);
 
     asm volatile("lidt (%0)" : : "r" (&IDT->ptr));
