@@ -80,7 +80,8 @@ u64 TIMER_get_boot_timestamp(void) {
 
 //In milliseconds
 void TIMER_sleep(u32 time) {
-    timers[clock_sources.sleep].sleep((u64)time * 1e6);
+    //1e6 milliseconds in a nanosecond
+    timers[clock_sources.sleep].sleep((u64)time * 1000000);
     return;
 }
 

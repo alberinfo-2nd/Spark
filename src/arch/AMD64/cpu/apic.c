@@ -39,7 +39,7 @@
 #define APIC_LINT0_VECTOR       0x350
 #define APIC_LINT1_VECTOR       0x360
     #define APIC_VECTOR(x)      (x & 0xFF)
-    #define APIC_VECTOR_MT(x)   ((x >> 8) & ((1 << 3) - 1))
+    #define APIC_VECTOR_MT(x)   ((x & ((1 << 3) - 1)) << 8)
     #define APIC_VECTOR_DS      1 << 12
     #define APIC_VECTOR_RIR     1 << 14
     #define APIC_VECTOR_TGM     1 << 15 //Trigger mode; 0 = Edge Triggered, 1 = Level triggered
@@ -109,8 +109,10 @@ bool X86_APIC_init() {
     X86_CPU_cli();
 
     struct X86_APIC_t* apic = (struct X86_APIC_t*)kalloc(sizeof(struct X86_APIC_t));
-    apic->baseAddress = 0xFEE00000; //Address should have been set as UC through MTRRs by the bios.
-    MMU_map_page(X86_CPU_get_self()->address_space->CR3, (void*)apic->baseAddress, (void*)apic->baseAddress, MMU_PAGE_4K, MMU_FLAG_NX | MMU_FLAG_GLOBAL | MMU_FLAG_RW | MMU_FLAG_PRESENT, 0);
+    apic->baseAddress = MSR_APIC_BASE_ADDR(X86_CPU_rdmsr(MSR_APIC_BASE_ADDR_REGISTER)); //Take the address currently set in the MSR. Maybe look at ACPI overrides?
+
+    //Mark page as UC with PCD and PWT bits.
+    MMU_map_page(X86_CPU_get_self()->address_space->CR3, (void*)apic->baseAddress, (void*)apic->baseAddress, MMU_PAGE_4K, MMU_FLAG_NX | MMU_FLAG_GLOBAL | MMU_FLAG_PCD | MMU_FLAG_PWT | MMU_FLAG_RW | MMU_FLAG_PRESENT, 0);
     apic->send_eoi          = &APIC_send_eoi;
     apic->read_register     = &xAPIC_read_register;
     apic->write_register    = &xAPIC_write_register;
@@ -118,10 +120,11 @@ bool X86_APIC_init() {
 
     //Map address into address space and enable the lapic + other things
 
-    X86_CPU_wrmsr(MSR_APIC_BASE_ADDR_REGISTER, MSR_APIC_BASE_ADDR(apic->baseAddress) | MSR_APIC_ENABLE);
+    //Bootstrap Core field is RO, real CPUs will complain about writes to it. Qemu & Bochs dont care.
+    X86_CPU_wrmsr(MSR_APIC_BASE_ADDR_REGISTER, MSR_APIC_BASE_ADDR(apic->baseAddress) | MSR_APIC_ENABLE | (X86_CPU_rdmsr(MSR_APIC_BASE_ADDR_REGISTER) & MSR_APIC_BSC));
 
     if(apic->read_register(APIC_FEATURES) & x2APIC_FEATURES_EXTENDED_ID) apic->write_register(APIC_CONTROL, x2APIC_FEATURES_EXTENDED_ID);
-    //if(apic->read_register(APIC_FEATURES) & x2APIC_FEATURES_SPECIFIC_EOI) lapic->write_register(APIC_CONTROL, x2APIC_FEATURES_SPECIFIC_EOI);
+    // if(apic->read_register(APIC_FEATURES) & x2APIC_FEATURES_SPECIFIC_EOI) apic->write_register(APIC_CONTROL, x2APIC_FEATURES_SPECIFIC_EOI);
 
     if(ecx & CPUID_x2APIC_SUPPORTED && ecx & apic->read_register(APIC_VERSION) & APIC_VERSION_x2APIC_PRESENT) {
         apic->baseAddress    = 0;
@@ -135,8 +138,6 @@ bool X86_APIC_init() {
     if((u64)APIC_SELF != (u64)apic) kfree(APIC_SELF);
     X86_CPU_get_self()->apic = (struct X86_APIC_t*)apic;
     apic->ID = apic->get_id();
-
-    //TODO: Possibly set LINT0 and LINT1?
 
     apic->write_register(APIC_SPURIOUS, APIC_ASE | 0xFF); //Set the spurious interrupt at entry 255
 

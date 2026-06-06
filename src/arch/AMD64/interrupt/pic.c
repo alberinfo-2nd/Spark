@@ -39,7 +39,7 @@ void X86_PIC_remap(u8 master_offset, u8 slave_offset) {
     port_io_wait();
     outportb(PIC_DATA_SLAVE, PIC_8086_MODE);
 
-    X86_PIC_enable();
+    X86_PIC_disable(); //Keep all interrupts masked. IRQs will be unmasked by their handlers as needed.
 }
 
 void X86_PIC_enable(void) {
@@ -53,7 +53,7 @@ void X86_PIC_disable(void) {
 }
 
 void X86_PIC_send_eoi(u8 IRQn) {
-    if(IRQn > 7) outportb(PIC_COMMAND_SLAVE, PIC_EOI);
+    if(IRQn >= 8) outportb(PIC_COMMAND_SLAVE, PIC_EOI);
     outportb(PIC_COMMAND_MASTER, PIC_EOI);
 }
 
@@ -68,7 +68,7 @@ void X86_PIC_mask(u8 IRQn) {
 }
 
 void X86_PIC_unmask(u8 IRQn) {
-u16 port = PIC_DATA_MASTER;
+    u16 port = PIC_DATA_MASTER;
     if(IRQn >= 8) {
         port = PIC_DATA_SLAVE;
         IRQn -= 8;

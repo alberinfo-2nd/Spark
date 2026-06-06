@@ -20,7 +20,7 @@
 static u8 current_status[3] = {0,0,0}; //a copy of the value in the command register
 static u16 current_divider[3] = {0, 0, 0};
 
-static bool sleeping = false;
+static volatile bool sleeping = false;
 
 void TIMER_PIT_set_encoding(u8 channel, u8 encoding) { 
     int channel_idx = channel - PIT_CH0;
@@ -45,7 +45,7 @@ void TIMER_PIT_set_reload_register(u8 channel, u16 value) {
     outportb(channel, value >> 8); //Hibyte
 }
 
-//If current mode is one shot, then value represents time until interrupt in microseconds. For generators, its frequency in hz
+//If current mode is one shot, then value represents time until interrupt in nanoseconds. For generators, its frequency in hz
 void TIMER_PIT_set_freq(u8 channel, u32 value) {
     int channel_idx = channel - PIT_CH0;
     u8 current_mode = (current_status[channel_idx] & (0b111 << 1)) >> 1;
@@ -58,9 +58,9 @@ void TIMER_PIT_set_freq(u8 channel, u32 value) {
         return;
     }
 
-    //Value would represent time in microseconds
-    if(value > PIT_count_quantum * 65536 / 1000) value = PIT_count_quantum * 65536 / 1000; //Maximum interval is ~55ms
-    u16 ticks_until_irq = value * 1000 / PIT_count_quantum;
+    //Value would represent time in nanoseconds
+    if(value > PIT_count_quantum * 65536) value = PIT_count_quantum * 65536; //Maximum interval is ~55ms
+    u16 ticks_until_irq = value / PIT_count_quantum;
     TIMER_PIT_set_reload_register(channel, ticks_until_irq);
 }
 
@@ -74,7 +74,8 @@ bool TIMER_PIT_init() {
     TIMER_PIT_set_encoding(PIT_CH0, PIT_ENCODING_PLAIN);
     TIMER_PIT_set_access_mode(PIT_CH0, PIT_ACCESS_fullbyte);
     TIMER_PIT_set_mode(PIT_CH0, PIT_MODE_one_shot);
-    TIMER_PIT_set_freq(PIT_CH0, 0);
+
+    X86_PIC_unmask(0);
 
     X86_CPU_sti();
 
@@ -103,7 +104,7 @@ void TIMER_PIT_sleep(u64 ns) {
         ns -= sleepTime;
 
         sleeping = true;
-        TIMER_PIT_set_freq(PIT_CH0, sleepTime / 1000);
+        TIMER_PIT_set_freq(PIT_CH0, sleepTime);
         while(sleeping) X86_CPU_hlt();
     }
 }
