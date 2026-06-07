@@ -12,7 +12,7 @@ struct timer_t {
     //Functions
     bool(*init)(void);
     void(*irq_handler)(void);
-    u64 (*timestamp)(void);
+    struct TIMER_Timestamp_t (*timestamp)(void);
     void (*sleep)(u64);
 };
 
@@ -26,7 +26,7 @@ static struct clock_sources_t clock_sources = {0, 0};
 struct timer_t timers[5] = {
     {TIMER_TYPE_PIT, false, false, false, &TIMER_PIT_init, &TIMER_PIT_irq_handler, NULL, &TIMER_PIT_sleep},
     {TIMER_TYPE_APIC, false, false, false, &TIMER_APIC_init, &TIMER_APIC_irq_handler, NULL, &TIMER_APIC_sleep},
-    {TIMER_TYPE_TSC, false, false, false,  NULL /*&TIMER_TSC_init*/, NULL, NULL, NULL},
+    {TIMER_TYPE_TSC, false, false, false,  &TIMER_TSC_init, NULL, &TIMER_TSC_get_timestamp, NULL},
     {TIMER_TYPE_APIC_TSC, false, false, false, NULL, NULL, NULL, NULL},
     {TIMER_TYPE_HPET, false, false, false, NULL, NULL, NULL, NULL},
 };
@@ -73,8 +73,8 @@ void TIMER_irq_handler(u8 IRQn) {
     }
 }
 
-u64 TIMER_get_boot_timestamp(void) {
-    if(timers[clock_sources.timestamp].timestamp == NULL) return 0;
+struct TIMER_Timestamp_t TIMER_get_boot_timestamp(void) {
+    if(timers[clock_sources.timestamp].timestamp == NULL) return (struct TIMER_Timestamp_t){0};
     return timers[clock_sources.timestamp].timestamp();
 }
 

@@ -58,7 +58,6 @@ bool TIMER_APIC_init() {
 
 void TIMER_APIC_irq_handler() {
     sleeping = false;
-    X86_CPU_get_self()->apic->send_eoi(0);
 }
 
 void TIMER_APIC_sleep(u64 ns) {

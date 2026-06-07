@@ -68,17 +68,17 @@ void DEBUG_SERIAL_write_str(const char* format, va_list args) {
             case '%':
                 format++;
                 switch (*format) {
-                    case '%':
+                    case '%': {
                         DEBUG_SERIAL_write('%');
                         break;
-                    case 'c':
+                    } case 'c': {
                         DEBUG_SERIAL_write((char)va_arg(args, int));
                         break;
-                    case 's':
+                    } case 's': {
                         DEBUG_SERIAL_write_str(va_arg(args, void*), args);
                         break;
-                    case 'X':
-                    case 'x':
+                    } case 'X':
+                    case 'x': {
                         DEBUG_SERIAL_write_str("0x\0", args);
 
                         u8 mask_move_count = 64 - 4; //From the start move everything except the most significant nibble
@@ -102,12 +102,31 @@ void DEBUG_SERIAL_write_str(const char* format, va_list args) {
                             mask_move_count -= 4;
                         }
                         break;
+                    } case 'i': {
+                        u64 arg = (u64)va_arg(args, u64);
+                        u64 reverseArg = 0;
+                        u64 digits = 0;
+
+                        do {
+                            reverseArg *= 10;
+                            reverseArg += arg % 10;
+                            arg /= 10;
+                            digits++;
+                        } while(arg);
+
+                        do {
+                            char c = (reverseArg % 10) + '0';
+                            DEBUG_SERIAL_write(c);
+                            reverseArg /= 10;
+                        } while(--digits);
+
                     //Other cases should also be handled
-                    case '\0':
+                    } case '\0': {
                         break;
 
-                    default:
+                    } default: {
                         break;
+                    }
                 }
                 break;
             default:

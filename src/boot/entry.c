@@ -34,5 +34,5 @@ void kentry(void* multiboot_data) {
 
     TIMER_init();
 
-    for(;;);
+    for(;;) asm volatile("hlt");
 }
